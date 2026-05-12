@@ -187,3 +187,9 @@ hive-mind-prompt-*.txt
 .claude/settings.json
 .vscode/tasks.json
 .vscode/settings.json
+
+# AgentDB runtime database and lock files (transient, machine-local)
+agentdb.rvf
+agentdb.rvf.lock
+*.rvf
+*.rvf.lock
