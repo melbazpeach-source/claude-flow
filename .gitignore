@@ -188,8 +188,9 @@ hive-mind-prompt-*.txt
 .vscode/tasks.json
 .vscode/settings.json
 
-# AgentDB runtime database and lock files (transient, machine-local)
-agentdb.rvf
-agentdb.rvf.lock
+# AgentDB runtime database and lock files (transient, machine-local).
+# Disabled (.disabled suffix) while the agentdb dependency is under review
+# for the Shai-Hulud campaign. Catch all variants so they stay untracked.
+agentdb.rvf*
 *.rvf
 *.rvf.lock
