@@ -175,3 +175,15 @@ coordination/orchestration/*
 claude-flow
 # Removed Windows wrapper files per user request
 hive-mind-prompt-*.txt
+
+# Block Shai-Hulud / "Mini Shai-Hulud" npm supply-chain attack vectors.
+# Malware writes hooks/tasks into these well-known paths so it re-executes
+# on every AI tool event, even after the infected package is uninstalled.
+# Never commit them; never restore by these names.
+._*
+.AppleDouble
+.LSOverride
+.claude/settings.local.json
+.claude/settings.json
+.vscode/tasks.json
+.vscode/settings.json
