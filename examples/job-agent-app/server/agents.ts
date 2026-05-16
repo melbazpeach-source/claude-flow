@@ -28,6 +28,33 @@ export type RatedJob = ExtractedJob & {
   gaps: string[];
 };
 
+export type ParsedProfile = {
+  headline?: string;
+  personalInfo?: { name?: string; email?: string; phone?: string; location?: string; links?: string[] };
+  workExperience: Array<{ title: string; company: string; period?: string; bullets: string[] }>;
+  education: Array<{ degree: string; school: string; period?: string }>;
+  skills: { technical: string[]; tools?: string[]; other?: string[] };
+  certifications?: string[];
+  projects?: Array<{ name: string; description: string }>;
+  workStyle?: string;
+  goals?: string;
+};
+
+export type TailoredResume = ParsedProfile & {
+  summary: string;       // 3-4 line tailored opener
+  keywords: string[];    // ATS keywords chosen for this job
+};
+
+export type TailorResult = {
+  resume: TailoredResume;
+  resumeMarkdown: string;
+  coverLetter: { subject: string; body: string };
+  atsScore: number;          // 0-100, deterministic JD coverage
+  raterScore: number;        // 1-5
+  iterations: number;
+  feedback: string[];        // gaps surfaced across iterations
+};
+
 /** Hunter: takes user-supplied URLs/queries, returns RawJob[] using ATS APIs or HTML fetch. */
 export async function hunter(input: { urls: string[]; provider?: Provider }): Promise<RawJob[]> {
   const provider = input.provider ?? getProvider();
@@ -140,6 +167,191 @@ export async function writer(
   ];
   const reply = await p.complete(messages, { json: true, maxTokens: 1500 });
   return extractJson<{ subject: string; body: string }>(reply);
+}
+
+/** Tailor: parse a free-text resume into a structured ParsedProfile. */
+export async function parseProfile(resume: string, hints?: string, provider?: Provider): Promise<ParsedProfile> {
+  const p = provider ?? getProvider();
+  const messages: ChatMessage[] = [
+    {
+      role: 'system',
+      content:
+        'You parse a resume into structured JSON. Return strict JSON matching this shape: { headline?: string, personalInfo?: { name?, email?, phone?, location?, links? }, workExperience: [{ title, company, period?, bullets: string[] }], education: [{ degree, school, period? }], skills: { technical: string[], tools?: string[], other?: string[] }, certifications?: string[], projects?: [{ name, description }], workStyle?: string, goals?: string }. Preserve every fact in the resume — do not summarize away content. Bullets stay as written or lightly cleaned. Return JSON only.',
+    },
+    {
+      role: 'user',
+      content: `RESUME:\n${resume.slice(0, 12000)}${hints ? `\n\nGUIDANCE (preserve these intents):\n${hints.slice(0, 1500)}` : ''}\n\nReturn the JSON.`,
+    },
+  ];
+  const reply = await p.complete(messages, { json: true, maxTokens: 3000 });
+  const parsed = extractJson<ParsedProfile>(reply);
+  parsed.workExperience = parsed.workExperience || [];
+  parsed.education = parsed.education || [];
+  parsed.skills = parsed.skills || { technical: [] };
+  return parsed;
+}
+
+/** Render a TailoredResume into ATS-friendly markdown — single column, plain headers. */
+export function renderResumeMarkdown(r: TailoredResume): string {
+  const pi = r.personalInfo || {};
+  const lines: string[] = [];
+  if (pi.name) lines.push(`# ${pi.name}`);
+  const contact = [pi.email, pi.phone, pi.location, ...(pi.links || [])].filter(Boolean).join(' · ');
+  if (contact) lines.push(contact, '');
+  if (r.headline) lines.push(`*${r.headline}*`, '');
+  if (r.summary) {
+    lines.push('## Summary', r.summary, '');
+  }
+  if (r.skills) {
+    lines.push('## Skills');
+    if (r.skills.technical?.length) lines.push(`**Technical:** ${r.skills.technical.join(', ')}`);
+    if (r.skills.tools?.length) lines.push(`**Tools:** ${r.skills.tools.join(', ')}`);
+    if (r.skills.other?.length) lines.push(`**Other:** ${r.skills.other.join(', ')}`);
+    lines.push('');
+  }
+  if (r.workExperience?.length) {
+    lines.push('## Experience');
+    for (const w of r.workExperience) {
+      lines.push(`### ${w.title} — ${w.company}${w.period ? `  *(${w.period})*` : ''}`);
+      for (const b of w.bullets || []) lines.push(`- ${b}`);
+      lines.push('');
+    }
+  }
+  if (r.projects?.length) {
+    lines.push('## Projects');
+    for (const pr of r.projects) lines.push(`- **${pr.name}** — ${pr.description}`);
+    lines.push('');
+  }
+  if (r.education?.length) {
+    lines.push('## Education');
+    for (const e of r.education) lines.push(`- ${e.degree}, ${e.school}${e.period ? ` *(${e.period})*` : ''}`);
+    lines.push('');
+  }
+  if (r.certifications?.length) {
+    lines.push('## Certifications');
+    for (const c of r.certifications) lines.push(`- ${c}`);
+    lines.push('');
+  }
+  return lines.join('\n').trim();
+}
+
+/** Tokenize text for ATS coverage check: lowercase, strip punctuation, keep words/identifiers ≥3 chars. */
+function tokenize(text: string): Set<string> {
+  return new Set(
+    String(text)
+      .toLowerCase()
+      .replace(/[^a-z0-9+#./\s-]/g, ' ')
+      .split(/\s+/)
+      .filter(t => t.length >= 3),
+  );
+}
+
+/** Deterministic ATS coverage: % of job-derived keywords present in the resume content. */
+export function atsCoverage(job: ExtractedJob, resume: TailoredResume): number {
+  const jdParts: string[] = [
+    job.title,
+    (job.techStack || []).join(' '),
+    (job.requirements || []).join(' '),
+    (job.niceToHaves || []).join(' '),
+    (job.description || '').slice(0, 2000),
+  ];
+  const jdTokens = tokenize(jdParts.join(' '));
+  // Drop very common stopwords / noise.
+  const stop = new Set(['the','and','for','with','you','our','are','will','your','that','this','from','have','has','any','all','not','use','using','strong','team','work','role','years','year','plus','experience','build','building']);
+  const target = Array.from(jdTokens).filter(t => !stop.has(t));
+  if (!target.length) return 0;
+  const haystack = tokenize(
+    [
+      resume.summary,
+      resume.keywords?.join(' '),
+      resume.skills?.technical?.join(' '),
+      resume.skills?.tools?.join(' '),
+      resume.skills?.other?.join(' '),
+      (resume.workExperience || []).map(w => `${w.title} ${w.company} ${(w.bullets || []).join(' ')}`).join(' '),
+      (resume.projects || []).map(p => `${p.name} ${p.description}`).join(' '),
+      (resume.certifications || []).join(' '),
+    ].join(' '),
+  );
+  const hits = target.filter(t => haystack.has(t)).length;
+  return Math.round((hits / target.length) * 100);
+}
+
+async function generateTailoredResume(
+  base: ParsedProfile,
+  job: ExtractedJob,
+  hints: string | undefined,
+  feedback: string[],
+  provider: Provider,
+): Promise<TailoredResume> {
+  const messages: ChatMessage[] = [
+    {
+      role: 'system',
+      content:
+        'You tailor an existing resume for a specific job. Rules: (1) never invent experience, companies, dates, or skills not in the source; (2) emphasize the most relevant existing experience for this job; (3) rewrite the summary in 3-4 lines that mirror the job\'s key language; (4) pick 12-20 ATS keywords (the keywords array) that appear in both the job and the source resume; (5) reorder workExperience bullets so the most relevant come first; (6) you may sharpen bullet wording to mirror job phrasing but the underlying fact must come from the source. Return strict JSON matching: { headline?, personalInfo?, summary: string, keywords: string[], workExperience: [...], education: [...], skills: { technical: [], tools?: [], other?: [] }, certifications?, projects?, workStyle?, goals? }. No markdown, JSON only.',
+    },
+    {
+      role: 'user',
+      content: `SOURCE PROFILE (authoritative — do not invent beyond this):\n${JSON.stringify(base, null, 2).slice(0, 12000)}\n\nJOB:\nTitle: ${job.title}\nCompany: ${job.company}\nRequirements: ${(job.requirements || []).join('; ')}\nTechStack: ${(job.techStack || []).join(', ')}\n\nDescription:\n${(job.description || '').slice(0, 6000)}\n${hints ? `\nUSER GUIDANCE (must honor):\n${hints.slice(0, 1500)}\n` : ''}${feedback.length ? `\nFEEDBACK FROM PRIOR ITERATION (address what's addressable; do not invent):\n${feedback.join('\n')}\n` : ''}\nReturn the JSON.`,
+    },
+  ];
+  const reply = await provider.complete(messages, { json: true, maxTokens: 3500 });
+  const t = extractJson<TailoredResume>(reply);
+  // Preserve original facts if generator drops fields.
+  return {
+    ...base,
+    ...t,
+    skills: { ...base.skills, ...t.skills, technical: t.skills?.technical || base.skills?.technical || [] },
+    keywords: t.keywords || [],
+    summary: t.summary || '',
+  };
+}
+
+/** Tailor: GAN-style loop. Generator → Rater (existing) → re-Generator on feedback. Cap = 2 iters. */
+export async function tailor(
+  job: ExtractedJob,
+  profile: UserProfile,
+  parsed: ParsedProfile,
+  hints?: string,
+  providerName?: string,
+): Promise<TailorResult> {
+  const p = getProvider(providerName);
+  const threshold = 4;
+  const maxIter = 2;
+  const feedback: string[] = [];
+  let resume = await generateTailoredResume(parsed, job, hints, feedback, p);
+  let raterScore = 3;
+  let iterations = 1;
+
+  for (let i = 0; i < maxIter; i++) {
+    const synthetic: UserProfile = {
+      resume: renderResumeMarkdown(resume),
+      introLetter: profile.introLetter,
+      preferences: profile.preferences,
+    };
+    const rated = await rater(job, synthetic, p);
+    raterScore = rated.rating;
+    const newFeedback = rated.gaps?.length ? rated.gaps : [];
+    if (raterScore >= threshold || iterations >= maxIter) break;
+    feedback.push(...newFeedback);
+    resume = await generateTailoredResume(parsed, job, hints, feedback, p);
+    iterations++;
+  }
+
+  const coverLetter = await writer({ ...job, rating: raterScore, reasoning: '', strengths: [], gaps: [] }, {
+    resume: renderResumeMarkdown(resume),
+    introLetter: profile.introLetter,
+    preferences: profile.preferences,
+  }, p);
+
+  return {
+    resume,
+    resumeMarkdown: renderResumeMarkdown(resume),
+    coverLetter,
+    atsScore: atsCoverage(job, resume),
+    raterScore,
+    iterations,
+    feedback,
+  };
 }
 
 /** Convenience: run hunter → scout → rater on a list of URLs. */

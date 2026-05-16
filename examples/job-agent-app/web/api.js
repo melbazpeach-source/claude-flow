@@ -21,6 +21,8 @@ export const api = {
   extract: (url, provider) => post('/api/jobs/extract', { url, provider }),
   rate: (job, profile, provider) => post('/api/jobs/rate', { job, profile, provider }),
   letter: (job, profile, provider) => post('/api/letters/draft', { job, profile, provider }),
+  parseProfile: (resume, hints, provider) => post('/api/profile/parse', { resume, hints, provider }),
+  tailor: (job, profile, parsed, hints, provider) => post('/api/letters/tailor', { job, profile, parsed, hints, provider }),
   emailStatus: () => get('/api/email/status'),
   emailDraft: (provider, to, subject, body) => post('/api/email/draft', { provider, to, subject, body }),
 };

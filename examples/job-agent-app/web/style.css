@@ -692,6 +692,76 @@ button.primary.loading::after { color: var(--on-accent); }
 }
 .letter-edit input, .letter-edit textarea { margin-bottom: var(--space-2); }
 
+/* Tailor — job-specific CV section */
+.tailor-edit {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  margin-top: var(--space-3);
+}
+.tailor-edit .cv-stats { display: inline-flex; gap: var(--space-2); align-items: center; }
+.tailor-edit .chip {
+  font-family: var(--font-mono);
+  font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .06em;
+  color: var(--muted); background: var(--panel-2);
+  border: 1px solid var(--border);
+  padding: 2px 8px; border-radius: var(--radius-pill);
+}
+.tailor-edit .chip.ats { color: var(--good); border-color: var(--good); background: var(--good-bg); }
+.tailor-edit .hint-inline {
+  font-family: var(--font-mono);
+  font-size: 10.5px; color: var(--muted);
+  letter-spacing: .04em;
+}
+.cv-preview {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--panel-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 12px; line-height: 1.55;
+  color: var(--text);
+  max-height: 360px; overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Hints block on Progress tab */
+.hints-block {
+  margin: var(--space-5) 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  padding: var(--space-3) var(--space-4);
+}
+.hints-block > summary {
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .08em;
+  color: var(--muted);
+  list-style: none;
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-1) 0;
+}
+.hints-block > summary::-webkit-details-marker { display: none; }
+.hints-block > summary::before {
+  content: "+"; font-size: 14px;
+  width: 14px; height: 14px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 3px;
+}
+.hints-block[open] > summary::before { content: "−"; }
+.hints-block .hint-inline {
+  font-family: var(--font-sans);
+  font-size: 12px; color: var(--muted);
+  text-transform: none; letter-spacing: 0;
+}
+.hints-block .hint { margin-top: var(--space-2); }
+
 /* Progress grid */
 .progress-grid {
   display: grid; grid-template-columns: 1fr 1fr;

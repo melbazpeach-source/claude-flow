@@ -3,7 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { huntAndRate, writer, hunter, scout, rater, UserProfile } from './agents.js';
+import { huntAndRate, writer, hunter, scout, rater, parseProfile, tailor, UserProfile, ParsedProfile } from './agents.js';
 import { getProvider } from './providers.js';
 import {
   googleAuthUrl,
@@ -66,6 +66,37 @@ app.post('/api/jobs/rate', async (req, res) => {
     const rated = await rater(job, profile, p);
     res.json({ job: rated });
   } catch (e: any) {
+    res.status(500).json({ error: String(e.message || e) });
+  }
+});
+
+app.post('/api/profile/parse', async (req, res) => {
+  try {
+    const { resume, hints, provider } = req.body as { resume: string; hints?: string; provider?: string };
+    if (!resume?.trim()) return res.status(400).json({ error: 'resume required' });
+    const p = getProvider(provider);
+    const parsed = await parseProfile(resume, hints, p);
+    res.json({ parsed });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e.message || e) });
+  }
+});
+
+app.post('/api/letters/tailor', async (req, res) => {
+  try {
+    const { job, profile, parsed, hints, provider } = req.body as {
+      job: any;
+      profile: UserProfile;
+      parsed?: ParsedProfile;
+      hints?: string;
+      provider?: string;
+    };
+    if (!job || !profile?.resume) return res.status(400).json({ error: 'job and profile required' });
+    const parsedProfile = parsed ?? (await parseProfile(profile.resume, hints, getProvider(provider)));
+    const result = await tailor(job, profile, parsedProfile, hints, provider);
+    res.json({ ...result, parsed: parsedProfile });
+  } catch (e: any) {
+    console.error(e);
     res.status(500).json({ error: String(e.message || e) });
   }
 });

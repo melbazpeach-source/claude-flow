@@ -100,6 +100,28 @@ function persistProfile() {
 resumeEl.addEventListener('input', persistProfile);
 introEl.addEventListener('input', persistProfile);
 
+const hintsEl = document.getElementById('profile-hints');
+hintsEl.value = store.getHints();
+hintsEl.addEventListener('input', () => store.setHints(hintsEl.value));
+
+const parseStatus = document.getElementById('parse-status');
+document.getElementById('reparse-profile').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  if (!resumeEl.value.trim()) { parseStatus.textContent = 'Add a resume first.'; return; }
+  btn.classList.add('loading'); btn.disabled = true;
+  parseStatus.textContent = 'Parsing…';
+  try {
+    const provider = store.getProviderOverride() || undefined;
+    const { parsed } = await api.parseProfile(resumeEl.value, hintsEl.value, provider);
+    store.setParsedProfile(parsed);
+    parseStatus.textContent = `✓ Parsed (${parsed.workExperience?.length || 0} roles, ${parsed.skills?.technical?.length || 0} skills)`;
+  } catch (err) {
+    parseStatus.textContent = `Failed: ${err.message}`;
+  } finally {
+    btn.classList.remove('loading'); btn.disabled = false;
+  }
+});
+
 document.getElementById('resume-file').addEventListener('change', e => importTextInto(e, resumeEl));
 document.getElementById('intro-file').addEventListener('change', e => importTextInto(e, introEl));
 document.getElementById('resume-export').addEventListener('click', () => downloadText('resume.txt', resumeEl.value));
@@ -400,6 +422,20 @@ function renderProgress() {
         </div>
         ${renderStars(job.rating)}
       </header>
+      <div class="tailor-edit">
+        <div class="letter-edit-header">
+          <h4>Tailored CV</h4>
+          ${job.tailor
+            ? `<span class="cv-stats"><span class="chip ats">ATS ${job.tailor.atsScore}%</span><span class="chip">Match ${job.tailor.raterScore}/5</span><span class="chip">${job.tailor.iterations} iter</span></span>`
+            : '<span class="hint-inline">No CV tailored yet</span>'}
+        </div>
+        ${job.tailor ? `<pre class="cv-preview">${escapeHtml(job.tailor.resumeMarkdown || '')}</pre>` : ''}
+        <div class="actions">
+          <button data-act="tailor-cv" class="${job.tailor ? '' : 'primary'}">${job.tailor ? 'Re-tailor' : 'Tailor for this job'}</button>
+          ${job.tailor ? `<button data-act="copy-cv">Copy</button><button data-act="export-cv">Export .md</button>` : ''}
+          <span class="tailor-flash flash"></span>
+        </div>
+      </div>
       <div class="letter-edit">
         <div class="letter-edit-header">
           <h4>Outreach letter</h4>
@@ -471,6 +507,53 @@ function renderProgress() {
     });
     wrap.querySelector('[data-act=send-gmail]').addEventListener('click', () => sendDraft('google', subj.value, bodyEl.value, showFlash));
     wrap.querySelector('[data-act=send-ms]').addEventListener('click', () => sendDraft('microsoft', subj.value, bodyEl.value, showFlash));
+
+    // ---- Tailor controls ----
+    const tailorFlashEl = wrap.querySelector('.tailor-flash');
+    const showTailorFlash = (msg) => { tailorFlashEl.textContent = msg; tailorFlashEl.classList.add('show'); setTimeout(() => tailorFlashEl.classList.remove('show'), 2800); };
+
+    wrap.querySelector('[data-act=tailor-cv]').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      btn.classList.add('loading');
+      showTailorFlash('Tailoring CV — generator → rater loop…');
+      try {
+        const provider = store.getProviderOverride() || undefined;
+        const profile = store.getProfile();
+        const parsed = store.getParsedProfile() || undefined;
+        const hints = store.getHints();
+        const result = await api.tailor(job, profile, parsed, hints, provider);
+        if (result.parsed) store.setParsedProfile(result.parsed);
+        store.updateTailor(job.id, {
+          resume: result.resume,
+          resumeMarkdown: result.resumeMarkdown,
+          coverLetter: result.coverLetter,
+          atsScore: result.atsScore,
+          raterScore: result.raterScore,
+          iterations: result.iterations,
+          feedback: result.feedback,
+        });
+        showTailorFlash(`✓ Tailored — ATS ${result.atsScore}% · Match ${result.raterScore}/5 · ${result.iterations} iter`);
+        setTimeout(() => renderProgress(), 700);
+      } catch (err) {
+        showTailorFlash(`Tailor failed: ${err.message}`);
+      } finally {
+        btn.classList.remove('loading');
+      }
+    });
+
+    wrap.querySelector('[data-act=copy-cv]')?.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(job.tailor.resumeMarkdown); showTailorFlash('✓ CV copied'); }
+      catch { showTailorFlash('Copy failed'); }
+    });
+    wrap.querySelector('[data-act=export-cv]')?.addEventListener('click', () => {
+      const blob = new Blob([job.tailor.resumeMarkdown], { type: 'text/markdown' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${job.company}-${job.title}-CV.md`.replace(/[^a-z0-9.-]+/gi, '_');
+      a.click();
+      URL.revokeObjectURL(a.href);
+      showTailorFlash('✓ Exported');
+    });
 
     container.appendChild(wrap);
   });

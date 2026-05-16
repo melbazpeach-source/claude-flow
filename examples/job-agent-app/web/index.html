@@ -116,6 +116,16 @@
         </div>
       </div>
     </div>
+    <details class="hints-block">
+      <summary>Tailoring guidance <span class="hint-inline">— optional, but improves Tailor results</span></summary>
+      <p class="hint">Free-text guidance the Tailor agent must honor when shaping a job-specific CV. E.g. "always lead with the design-system work", "downplay the freelance years", "never mention crypto experience".</p>
+      <textarea id="profile-hints" rows="4" placeholder="e.g. lead with platform work, keep mobile in skills only…" aria-label="CV tailoring guidance"></textarea>
+      <div class="actions">
+        <button id="reparse-profile">Re-parse resume into structure</button>
+        <span id="parse-status" class="status"></span>
+      </div>
+    </details>
+
     <h3>In-progress applications</h3>
     <div id="progress-list" class="progress-list"></div>
   </section>

@@ -50,6 +50,33 @@ export const store = {
     }
     save(s);
   },
+  updateTailor(id, tailor) {
+    const s = load();
+    const list = s.saved || [];
+    const j = list.find(x => x.id === id);
+    if (j) {
+      j.tailor = tailor;
+      if (tailor?.coverLetter) j.letter = tailor.coverLetter;
+      j.status = j.status === 'saved' ? 'progress' : j.status;
+    }
+    save(s);
+  },
+  getParsedProfile() {
+    return load().parsedProfile || null;
+  },
+  setParsedProfile(parsed) {
+    const s = load();
+    s.parsedProfile = parsed;
+    save(s);
+  },
+  getHints() {
+    return load().cvHints || '';
+  },
+  setHints(text) {
+    const s = load();
+    s.cvHints = text;
+    save(s);
+  },
   setProviderOverride(p) {
     const s = load();
     s.provider = p;
