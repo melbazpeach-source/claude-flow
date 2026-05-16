@@ -8,18 +8,21 @@
 :root {
   --bg: #0f1115; --panel: #161922; --panel-2: #1e2230;
   --text: #e7ebf3; --muted: #8a93a6;
-  --accent: #6aa9ff; --accent-2: #4f8cf0;
+  --accent: #e7ebf3; --accent-2: #ffffff; --on-accent: #0f1115;
   --good: #5fd17f; --warn: #f0b35f; --bad: #ef6e6e;
   --border: #2a2f3d;
 }
 @media (prefers-color-scheme: light) {
-  :root { --bg:#f6f7fb; --panel:#fff; --panel-2:#f0f2f7; --text:#1a1d24; --muted:#5b6173; --border:#e0e3ec; }
+  :root {
+    --bg:#f6f7fb; --panel:#fff; --panel-2:#f0f2f7; --text:#1a1d24; --muted:#5b6173; --border:#e0e3ec;
+    --accent:#1a1d24; --accent-2:#0f1115; --on-accent:#ffffff;
+  }
 }
 * { box-sizing: border-box; }
 body { margin:0; font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text); }
 header { padding:16px 24px; border-bottom:1px solid var(--border); background:var(--panel); }
 header h1 { margin:0 0 8px; font-size:18px; }
-header h1 .pill { font-size:11px; background:var(--accent-2); color:#fff; padding:2px 8px; border-radius:999px; margin-left:8px; vertical-align:middle; }
+header h1 .pill { font-size:11px; background:var(--accent-2); color:var(--on-accent); padding:2px 8px; border-radius:999px; margin-left:8px; vertical-align:middle; }
 nav#tabs { display:flex; gap:4px; flex-wrap:wrap; }
 nav#tabs button { background:transparent; border:1px solid transparent; color:var(--muted); padding:6px 12px; border-radius:6px; cursor:pointer; font:inherit; }
 nav#tabs button:hover { color:var(--text); }
@@ -41,8 +44,8 @@ fieldset legend { padding:0 6px; color:var(--text); }
 .actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:12px 0; }
 button, .btn { background:var(--panel-2); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:7px 12px; cursor:pointer; font:inherit; }
 button:hover, .btn:hover { border-color:var(--accent); }
-button.primary { background:var(--accent-2); border-color:var(--accent-2); color:white; }
-button.primary:hover { background:var(--accent); border-color:var(--accent); }
+button.primary { background:var(--accent-2); border-color:var(--accent-2); color:var(--on-accent); }
+button.primary:hover { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
 button.danger { color:var(--bad); border-color:var(--bad); background:transparent; }
 .status { color:var(--muted); font-size:13px; }
 .suggestions, .saved-list, .progress-list { display:grid; gap:12px; margin-top:16px; }

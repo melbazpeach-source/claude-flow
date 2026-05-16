@@ -1,34 +1,104 @@
 import { api } from './api.js';
 import { store, ageString } from './store.js';
 
-// --- Tab routing ---
-document.querySelectorAll('#tabs button').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const target = btn.dataset.tab;
-    document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b === btn));
-    document.querySelectorAll('main > section').forEach(s => s.classList.toggle('active', s.id === target));
-    if (target === 'saved') renderSaved();
-    if (target === 'progress') renderProgress();
-    if (target === 'settings') refreshEmailStatus();
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const escapeHtml = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const escapeAttr = s => escapeHtml(s).replace(/'/g, '&#39;');
+const timestamp = () => {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+};
+
+// ============================================================
+// TAB ROUTING (with arrow-key roving + aria-selected)
+// ============================================================
+const tabs = Array.from(document.querySelectorAll('.tab'));
+const panels = Array.from(document.querySelectorAll('main > section.panel'));
+
+function activateTab(target, focus = false) {
+  tabs.forEach(t => {
+    const isActive = t.dataset.tab === target;
+    t.setAttribute('aria-selected', String(isActive));
+    t.setAttribute('tabindex', isActive ? '0' : '-1');
+    if (isActive && focus) t.focus();
+  });
+  panels.forEach(p => {
+    const isActive = p.id === target;
+    p.classList.toggle('active', isActive);
+    if (isActive) p.removeAttribute('hidden'); else p.setAttribute('hidden', '');
+  });
+  if (target === 'saved') renderSaved();
+  if (target === 'progress') renderProgress();
+  if (target === 'settings') refreshEmailStatus();
+}
+window.activateTab = activateTab;
+
+tabs.forEach((t, i) => {
+  t.addEventListener('click', () => activateTab(t.dataset.tab));
+  t.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const dir = e.key === 'ArrowRight' ? 1 : -1;
+      const next = (i + dir + tabs.length) % tabs.length;
+      activateTab(tabs[next].dataset.tab, true);
+    } else if (e.key === 'Home') {
+      e.preventDefault(); activateTab(tabs[0].dataset.tab, true);
+    } else if (e.key === 'End') {
+      e.preventDefault(); activateTab(tabs[tabs.length - 1].dataset.tab, true);
+    }
   });
 });
 
-// --- Profile (Progress tab) ---
+// ============================================================
+// SQUAD TILE + LOG HELPERS
+// ============================================================
+function setSquadState(name, state) {
+  const tile = document.querySelector(`.squad-tile[data-agent="${name}"]`);
+  if (!tile) return;
+  tile.classList.remove('active', 'done');
+  if (state) tile.classList.add(state);
+}
+function resetSquad() {
+  document.querySelectorAll('.squad-tile').forEach(t => t.classList.remove('active', 'done'));
+}
+function appendLog(bodyEl, agent, msg, opts = {}) {
+  const line = document.createElement('div');
+  line.className = `log-line ${agent}${opts.muted ? ' muted' : ''}`;
+  line.innerHTML = `<span class="ts">${timestamp()}</span><span class="agent">${agent.toUpperCase()}</span><span class="msg">${escapeHtml(msg)}</span>`;
+  bodyEl.appendChild(line);
+  bodyEl.parentElement.scrollTop = bodyEl.parentElement.scrollHeight;
+}
+
+// ============================================================
+// PROFILE BINDING (Progress tab)
+// ============================================================
 const resumeEl = document.getElementById('profile-resume');
 const introEl = document.getElementById('profile-intro');
-const profile = store.getProfile();
-resumeEl.value = profile.resume || '';
-introEl.value = profile.introLetter || '';
+const seed = store.getProfile();
+resumeEl.value = seed.resume || '';
+introEl.value = seed.introLetter || '';
 
-function persistProfileFromUI() {
+function collectPrefs() {
+  const split = s => s.split(',').map(x => x.trim()).filter(Boolean);
+  return {
+    titleKeywords: split(document.getElementById('pref-titles').value),
+    locations: split(document.getElementById('pref-locations').value),
+    excludeKeywords: split(document.getElementById('pref-exclude').value),
+    remoteOnly: document.getElementById('pref-remote').checked,
+    minSalary: Number(document.getElementById('pref-salary').value) || undefined,
+  };
+}
+function persistProfile() {
   store.setProfile({
     resume: resumeEl.value,
     introLetter: introEl.value,
-    preferences: collectPreferences(),
+    preferences: collectPrefs(),
   });
 }
-resumeEl.addEventListener('input', persistProfileFromUI);
-introEl.addEventListener('input', persistProfileFromUI);
+resumeEl.addEventListener('input', persistProfile);
+introEl.addEventListener('input', persistProfile);
 
 document.getElementById('resume-file').addEventListener('change', e => importTextInto(e, resumeEl));
 document.getElementById('intro-file').addEventListener('change', e => importTextInto(e, introEl));
@@ -39,7 +109,7 @@ async function importTextInto(e, el) {
   const f = e.target.files?.[0];
   if (!f) return;
   el.value = await f.text();
-  persistProfileFromUI();
+  persistProfile();
 }
 function downloadText(name, content) {
   const blob = new Blob([content], { type: 'text/plain' });
@@ -50,290 +120,437 @@ function downloadText(name, content) {
   URL.revokeObjectURL(a.href);
 }
 
-// --- Hunt tab ---
-function collectPreferences() {
-  const splitList = s => s.split(',').map(x => x.trim()).filter(Boolean);
-  return {
-    titleKeywords: splitList(document.getElementById('pref-titles').value),
-    locations: splitList(document.getElementById('pref-locations').value),
-    excludeKeywords: splitList(document.getElementById('pref-exclude').value),
-    remoteOnly: document.getElementById('pref-remote').checked,
-    minSalary: Number(document.getElementById('pref-salary').value) || undefined,
-  };
-}
+// Restore preference inputs from stored profile.
+(function restorePrefs() {
+  const p = store.getProfile().preferences || {};
+  document.getElementById('pref-titles').value = (p.titleKeywords || []).join(', ');
+  document.getElementById('pref-locations').value = (p.locations || []).join(', ');
+  document.getElementById('pref-exclude').value = (p.excludeKeywords || []).join(', ');
+  document.getElementById('pref-remote').checked = Boolean(p.remoteOnly);
+  document.getElementById('pref-salary').value = p.minSalary ?? '';
+})();
 
+// ============================================================
+// HUNT — calls real backend, narrates around the fetch
+// ============================================================
 const huntStatus = document.getElementById('hunt-status');
-document.getElementById('hunt-go').addEventListener('click', async () => {
-  const urls = document.getElementById('hunt-urls').value.split('\n').map(s => s.trim()).filter(Boolean);
-  if (!urls.length) return alert('Paste at least one URL');
-  persistProfileFromUI();
+const huntLog = document.getElementById('hunt-log');
+const huntLogBody = document.getElementById('hunt-log-body');
+const huntBtn = document.getElementById('hunt-go');
+
+huntBtn.addEventListener('click', async () => {
+  const urlsRaw = document.getElementById('hunt-urls');
+  const urls = urlsRaw.value.split('\n').map(s => s.trim()).filter(Boolean);
+  if (!urls.length) {
+    urlsRaw.focus();
+    huntStatus.textContent = 'Paste at least one URL.';
+    return;
+  }
+  persistProfile();
   const prof = store.getProfile();
-  if (!prof.resume?.trim()) return alert('Add your resume in the Progress tab first.');
-  huntStatus.textContent = 'Squad working… (this can take 10–60s)';
+  if (!prof.resume?.trim()) {
+    huntStatus.textContent = 'Add your resume in the Progress tab first.';
+    activateTab('progress', true);
+    return;
+  }
+
+  huntBtn.classList.add('loading');
+  huntBtn.disabled = true;
+  huntStatus.textContent = 'Squad working…';
+  huntLog.style.display = 'block';
+  huntLogBody.innerHTML = '';
   document.getElementById('hunt-results').innerHTML = '';
+  resetSquad();
+
+  const step = reduceMotion ? 0 : 420;
+  const provider = store.getProviderOverride() || undefined;
+
+  const narration = (async () => {
+    setSquadState('hunter', 'active');
+    appendLog(huntLogBody, 'hunter', `scanning ${urls.length} board(s)…`);
+    await sleep(step);
+    appendLog(huntLogBody, 'hunter', `→ ATS detectors: Greenhouse / Lever / Ashby / Workable; HTML fallback otherwise`, { muted: true });
+    setSquadState('hunter', 'done');
+
+    setSquadState('scout', 'active');
+    await sleep(step / 2);
+    appendLog(huntLogBody, 'scout', `extracting title, salary, requirements, tech stack…`);
+    await sleep(step);
+    setSquadState('scout', 'done');
+
+    setSquadState('rater', 'active');
+    await sleep(step / 2);
+    appendLog(huntLogBody, 'rater', `comparing against your resume + preferences…`);
+  })();
+
   try {
-    const provider = store.getProviderOverride() || undefined;
-    const { jobs } = await api.hunt(urls, prof, provider);
+    const [_, res] = await Promise.all([narration, api.hunt(urls, prof, provider)]);
+    setSquadState('rater', 'done');
+    const jobs = res.jobs || [];
+    appendLog(huntLogBody, 'done', `squad complete. ${jobs.length} role${jobs.length === 1 ? '' : 's'} returned.`);
     renderSuggestions(jobs, document.getElementById('hunt-results'));
-    huntStatus.textContent = `Found ${jobs.length} job(s).`;
+    huntStatus.textContent = `Found ${jobs.length} role${jobs.length === 1 ? '' : 's'}.`;
   } catch (e) {
+    setSquadState('rater', null);
+    appendLog(huntLogBody, 'done', `error: ${e.message}`);
     huntStatus.textContent = `Error: ${e.message}`;
+  } finally {
+    huntBtn.classList.remove('loading');
+    huntBtn.disabled = false;
+    await sleep(800);
+    resetSquad();
   }
 });
 
-// --- Job card rendering ---
-function jobId(job) {
-  return `${job.source || 'x'}-${job.externalId || job.url}`;
-}
-
+// ============================================================
+// CARD RENDERING
+// ============================================================
+function jobId(job) { return `${job.source || 'x'}-${job.externalId || job.url}`; }
 function renderStars(rating) {
   const r = Math.max(1, Math.min(5, Math.round(rating || 3)));
-  return Array.from({ length: 5 }, (_, i) => `<span class="star ${i < r ? 'on' : ''}">★</span>`).join('');
+  const stars = Array.from({length:5}, (_,i) => `<span class="star ${i < r ? 'on' : ''}" aria-hidden="true">★</span>`).join('');
+  return `<span class="rating" role="img" aria-label="${r} of 5 stars">${stars}<span class="score">${r}/5</span></span>`;
+}
+
+function renderJobCard(job, mode) {
+  const node = document.createElement('article');
+  node.className = 'job-card reveal';
+
+  const metaSaved = job.savedAt ? `<span class="sep">·</span><span>${ageString(job.savedAt)}</span>` : '';
+  const badge = job.status ? `<span class="sep">·</span><span class="badge status-${job.status}">${job.status}</span>` : '';
+
+  const detailsHtml = (job.strengths?.length || job.gaps?.length) ? `
+    <details>
+      <summary>Strengths &amp; gaps</summary>
+      <div class="sg-grid">
+        <div class="sg-col strengths">
+          <h4>Strengths</h4>
+          <ul>${(job.strengths||[]).map(s => `<li>${escapeHtml(s)}</li>`).join('') || '<li style="opacity:.5">—</li>'}</ul>
+        </div>
+        <div class="sg-col gaps">
+          <h4>Gaps</h4>
+          <ul>${(job.gaps||[]).map(s => `<li>${escapeHtml(s)}</li>`).join('') || '<li style="opacity:.5">—</li>'}</ul>
+        </div>
+      </div>
+    </details>` : '';
+
+  let footer = '';
+  if (mode === 'suggest') {
+    footer = `<footer class="actions">
+      <a class="link" href="${escapeAttr(job.url)}" target="_blank" rel="noopener">Open listing</a>
+      <button data-act="discard">Discard</button>
+      <button data-act="save">Save</button>
+      <button data-act="progress" class="primary">Save &amp; progress</button>
+      <span class="flash"></span>
+    </footer>`;
+  } else if (mode === 'saved') {
+    footer = `<footer class="actions">
+      <a class="link" href="${escapeAttr(job.url)}" target="_blank" rel="noopener">Open listing</a>
+      <button data-act="progress">Draft letter</button>
+      <button data-act="remove" class="danger">Remove</button>
+      <span class="flash"></span>
+    </footer>`;
+  }
+
+  node.innerHTML = `
+    <header>
+      <div class="title-block">
+        <h3 class="job-title">${escapeHtml(job.title)}</h3>
+        <p class="meta">
+          <span class="company">${escapeHtml(job.company)}</span>
+          <span class="sep">·</span>
+          <span>${escapeHtml(job.location || '—')}</span>
+          ${metaSaved}
+          ${badge}
+        </p>
+      </div>
+      ${renderStars(job.rating)}
+    </header>
+    <p class="reasoning">${escapeHtml(job.reasoning || '')}</p>
+    ${detailsHtml}
+    ${footer}`;
+
+  return node;
+}
+
+function setFlash(node, msg) {
+  const flash = node.querySelector('.flash');
+  if (!flash) return;
+  flash.textContent = msg;
+  flash.classList.add('show');
 }
 
 function renderSuggestions(jobs, container) {
   container.innerHTML = '';
-  const tpl = document.getElementById('job-card-template');
-  for (const job of jobs) {
-    const node = tpl.content.firstElementChild.cloneNode(true);
-    node.querySelector('.title').textContent = job.title;
-    node.querySelector('.company').textContent = job.company;
-    node.querySelector('.location').textContent = job.location || '—';
-    node.querySelector('.rating').innerHTML = renderStars(job.rating);
-    node.querySelector('.rating').title = job.reasoning || '';
-    node.querySelector('.reasoning').textContent = job.reasoning || '';
-    const sUl = node.querySelector('ul.strengths');
-    const gUl = node.querySelector('ul.gaps');
-    (job.strengths || []).forEach(s => {
-      const li = document.createElement('li'); li.textContent = s; sUl.appendChild(li);
-    });
-    (job.gaps || []).forEach(s => {
-      const li = document.createElement('li'); li.textContent = s; gUl.appendChild(li);
-    });
-    const link = node.querySelector('a.link');
-    link.href = job.url; link.textContent = 'Open listing';
-    const id = jobId(job);
-    job.id = id;
+  jobs.forEach((job, i) => {
+    job.id = jobId(job);
+    const node = renderJobCard(job, 'suggest');
+    node.style.animationDelay = `${i * 80}ms`;
+    container.appendChild(node);
 
-    node.querySelector('.discard').addEventListener('click', () => node.remove());
-    node.querySelector('.save').addEventListener('click', () => {
-      store.upsertSaved(job, 'saved');
-      flash(node, 'Saved');
+    node.querySelector('[data-act=discard]').addEventListener('click', () => {
+      node.style.transition = 'opacity .2s, transform .2s';
+      node.style.opacity = '0';
+      node.style.transform = 'translateX(-8px)';
+      setTimeout(() => node.remove(), 200);
     });
-    node.querySelector('.progress').addEventListener('click', async () => {
+    node.querySelector('[data-act=save]').addEventListener('click', () => {
+      store.upsertSaved(job, 'saved');
+      setFlash(node, '✓ Saved');
+    });
+    node.querySelector('[data-act=progress]').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      btn.classList.add('loading');
       store.upsertSaved(job, 'progress');
-      flash(node, 'Drafting letter…');
+      setFlash(node, 'Drafting letter…');
       try {
-        const prof = store.getProfile();
         const provider = store.getProviderOverride() || undefined;
-        const { letter } = await api.letter(job, prof, provider);
-        store.updateLetter(id, letter);
-        flash(node, 'Letter drafted — see Progress tab');
-      } catch (e) {
-        flash(node, `Letter failed: ${e.message}`);
+        const { letter } = await api.letter(job, store.getProfile(), provider);
+        store.updateLetter(job.id, letter);
+        setFlash(node, '✓ Letter drafted — see Progress tab');
+      } catch (err) {
+        setFlash(node, `Letter failed: ${err.message}`);
+      } finally {
+        btn.classList.remove('loading');
       }
     });
-    container.appendChild(node);
-  }
+  });
 }
 
-function flash(node, msg) {
-  let el = node.querySelector('.flash');
-  if (!el) {
-    el = document.createElement('span');
-    el.className = 'flash status';
-    el.style.marginLeft = '8px';
-    node.querySelector('footer.actions').appendChild(el);
-  }
-  el.textContent = msg;
-}
-
-// --- Saved tab ---
+// ============================================================
+// SAVED TAB
+// ============================================================
 function renderSaved() {
   const container = document.getElementById('saved-list');
   container.innerHTML = '';
   const saved = store.getSaved();
   if (!saved.length) {
-    container.innerHTML = '<p class="hint">No saved jobs yet. Hunt some first!</p>';
+    container.innerHTML = `
+      <div class="empty">
+        <div class="glyph">∅</div>
+        <p>No saved jobs yet. Hunt some roles or run the Demo, then click <strong>Save</strong> on anything that looks promising.</p>
+        <div class="actions">
+          <button onclick="activateTab('hunt')">Go to Hunt</button>
+          <button class="primary" onclick="activateTab('demo')">Try the demo</button>
+        </div>
+      </div>`;
     return;
   }
-  for (const job of saved) {
-    const wrapper = document.createElement('article');
-    wrapper.className = 'job-card';
-    wrapper.innerHTML = `
-      <header>
-        <div>
-          <h3>${escapeHtml(job.title)}</h3>
-          <p class="meta">
-            <span>${escapeHtml(job.company)}</span> · <span>${escapeHtml(job.location || '—')}</span>
-            · <span>${ageString(job.savedAt)}</span>
-            · <span class="badge status-${job.status}">${job.status}</span>
-          </p>
-        </div>
-        <div class="rating">${renderStars(job.rating)}</div>
-      </header>
-      <p class="reasoning">${escapeHtml(job.reasoning || '')}</p>
-      <footer class="actions">
-        <a class="link" target="_blank" rel="noopener" href="${escapeAttr(job.url)}">Open listing</a>
-        <button data-act="progress">Progress (draft letter)</button>
-        <button data-act="remove" class="danger">Remove</button>
-      </footer>`;
-    wrapper.querySelector('[data-act=remove]').addEventListener('click', () => {
-      store.removeSaved(job.id);
-      renderSaved();
+  saved.forEach((job, i) => {
+    const node = renderJobCard(job, 'saved');
+    node.style.animationDelay = `${i * 60}ms`;
+    container.appendChild(node);
+
+    node.querySelector('[data-act=remove]').addEventListener('click', () => {
+      node.style.transition = 'opacity .2s, transform .2s';
+      node.style.opacity = '0';
+      node.style.transform = 'translateX(-8px)';
+      setTimeout(() => { store.removeSaved(job.id); renderSaved(); }, 200);
     });
-    wrapper.querySelector('[data-act=progress]').addEventListener('click', async () => {
-      const prof = store.getProfile();
-      const provider = store.getProviderOverride() || undefined;
-      wrapper.querySelector('[data-act=progress]').textContent = 'Drafting…';
+    node.querySelector('[data-act=progress]').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      btn.classList.add('loading');
       try {
-        const { letter } = await api.letter(job, prof, provider);
+        const provider = store.getProviderOverride() || undefined;
+        const { letter } = await api.letter(job, store.getProfile(), provider);
         store.updateLetter(job.id, letter);
-        renderSaved();
-        renderProgress();
-        alert('Letter drafted — see Progress tab');
-      } catch (e) {
-        alert(`Letter failed: ${e.message}`);
+        setFlash(node, '✓ Drafted — see Progress tab');
+        setTimeout(() => { renderSaved(); }, 600);
+      } catch (err) {
+        setFlash(node, `Letter failed: ${err.message}`);
+      } finally {
+        btn.classList.remove('loading');
       }
     });
-    container.appendChild(wrapper);
-  }
+  });
 }
 
-// --- Progress tab (in-progress applications + letter editing) ---
+// ============================================================
+// PROGRESS TAB
+// ============================================================
 function renderProgress() {
   const container = document.getElementById('progress-list');
   container.innerHTML = '';
   const items = store.getSaved().filter(j => j.status === 'progress' || j.status === 'drafted');
   if (!items.length) {
-    container.innerHTML = '<p class="hint">Nothing in progress yet. Save & progress a job to draft a letter.</p>';
+    container.innerHTML = `
+      <div class="empty">
+        <div class="glyph">✎</div>
+        <p>Nothing in progress yet. Hunt or run the Demo, then click <strong>Save &amp; progress</strong> on a job to have the Writer draft an outreach letter.</p>
+      </div>`;
     return;
   }
-  for (const job of items) {
-    const wrapper = document.createElement('article');
-    wrapper.className = 'job-card';
-    wrapper.innerHTML = `
+  items.forEach((job, i) => {
+    const wrap = document.createElement('article');
+    wrap.className = 'job-card reveal';
+    wrap.style.animationDelay = `${i * 60}ms`;
+    const subject = job.letter?.subject || `Application — ${job.title} @ ${job.company}`;
+    const body = job.letter?.body || '';
+    wrap.innerHTML = `
       <header>
-        <div>
-          <h3>${escapeHtml(job.title)}</h3>
+        <div class="title-block">
+          <h3 class="job-title">${escapeHtml(job.title)}</h3>
           <p class="meta">
-            <span>${escapeHtml(job.company)}</span> · <span>${escapeHtml(job.location || '—')}</span>
-            · <span class="badge status-${job.status}">${job.status}</span>
+            <span class="company">${escapeHtml(job.company)}</span>
+            <span class="sep">·</span>
+            <span>${escapeHtml(job.location || '—')}</span>
+            <span class="sep">·</span>
+            <span class="badge status-${job.status}">${job.status}</span>
           </p>
         </div>
-        <div class="rating">${renderStars(job.rating)}</div>
+        ${renderStars(job.rating)}
       </header>
       <div class="letter-edit">
-        <label>Subject<input class="subj" value="${escapeAttr(job.letter?.subject || `Application — ${job.title} @ ${job.company}`)}" /></label>
-        <label>Body<textarea class="body" rows="14">${escapeHtml(job.letter?.body || '')}</textarea></label>
+        <div class="letter-edit-header">
+          <h4>Outreach letter</h4>
+          <span class="dirty-flag">unsaved changes</span>
+        </div>
+        <label for="subj-${i}">Subject</label>
+        <input id="subj-${i}" class="subj" value="${escapeAttr(subject)}" />
+        <label for="body-${i}">Body</label>
+        <textarea id="body-${i}" class="body" rows="12">${escapeHtml(body)}</textarea>
         <div class="actions">
           <button data-act="save-letter" class="primary">Save edits</button>
           <button data-act="regen">Re-draft</button>
           <button data-act="copy">Copy</button>
           <button data-act="export">Export .eml</button>
           <label class="btn">Import .txt<input type="file" hidden accept=".txt,.md,.eml" /></label>
-          <button data-act="send-gmail">Send to Gmail drafts</button>
-          <button data-act="send-ms">Send to Outlook drafts</button>
+          <button data-act="send-gmail">Gmail draft</button>
+          <button data-act="send-ms">Outlook draft</button>
+          <span class="flash"></span>
         </div>
       </div>`;
-    const subj = wrapper.querySelector('.subj');
-    const body = wrapper.querySelector('.body');
+    const letterEdit = wrap.querySelector('.letter-edit');
+    const subj = wrap.querySelector('.subj');
+    const bodyEl = wrap.querySelector('.body');
+    const flash = wrap.querySelector('.flash');
+    const showFlash = (msg) => { flash.textContent = msg; flash.classList.add('show'); setTimeout(() => flash.classList.remove('show'), 2400); };
+    const markDirty = () => letterEdit.classList.add('dirty');
+    subj.addEventListener('input', markDirty);
+    bodyEl.addEventListener('input', markDirty);
 
-    wrapper.querySelector('[data-act=save-letter]').addEventListener('click', () => {
-      store.updateLetter(job.id, { subject: subj.value, body: body.value });
-      alert('Saved.');
+    wrap.querySelector('[data-act=save-letter]').addEventListener('click', () => {
+      store.updateLetter(job.id, { subject: subj.value, body: bodyEl.value });
+      letterEdit.classList.remove('dirty');
+      showFlash('✓ Saved');
     });
-    wrapper.querySelector('[data-act=regen]').addEventListener('click', async () => {
-      const prof = store.getProfile();
-      const provider = store.getProviderOverride() || undefined;
+    wrap.querySelector('[data-act=regen]').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      btn.classList.add('loading');
       try {
-        const { letter } = await api.letter(job, prof, provider);
+        const provider = store.getProviderOverride() || undefined;
+        const { letter } = await api.letter(job, store.getProfile(), provider);
         subj.value = letter.subject;
-        body.value = letter.body;
+        bodyEl.value = letter.body;
         store.updateLetter(job.id, letter);
-      } catch (e) { alert(e.message); }
+        letterEdit.classList.remove('dirty');
+        showFlash('✓ Re-drafted');
+      } catch (err) {
+        showFlash(`Failed: ${err.message}`);
+      } finally {
+        btn.classList.remove('loading');
+      }
     });
-    wrapper.querySelector('[data-act=copy]').addEventListener('click', () => {
-      navigator.clipboard.writeText(body.value);
+    wrap.querySelector('[data-act=copy]').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(bodyEl.value); showFlash('✓ Copied'); }
+      catch { bodyEl.select(); document.execCommand?.('copy'); showFlash('✓ Copied'); }
     });
-    wrapper.querySelector('[data-act=export]').addEventListener('click', () => {
-      const eml = `Subject: ${subj.value}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${body.value}`;
+    wrap.querySelector('[data-act=export]').addEventListener('click', () => {
+      const eml = `Subject: ${subj.value}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${bodyEl.value}`;
       const blob = new Blob([eml], { type: 'message/rfc822' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `${job.company}-${job.title}.eml`.replace(/[^a-z0-9.-]+/gi, '_');
+      a.download = `${job.company}-${job.title}.eml`.replace(/[^a-z0-9.-]+/gi,'_');
       a.click();
+      URL.revokeObjectURL(a.href);
+      showFlash('✓ Exported');
     });
-    wrapper.querySelector('input[type=file]').addEventListener('change', async e => {
+    wrap.querySelector('input[type=file]').addEventListener('change', async e => {
       const f = e.target.files?.[0];
-      if (f) body.value = await f.text();
+      if (f) { bodyEl.value = await f.text(); markDirty(); showFlash('✓ Imported'); }
     });
-    wrapper.querySelector('[data-act=send-gmail]').addEventListener('click', () => sendDraft('google', subj.value, body.value));
-    wrapper.querySelector('[data-act=send-ms]').addEventListener('click', () => sendDraft('microsoft', subj.value, body.value));
-    container.appendChild(wrapper);
-  }
+    wrap.querySelector('[data-act=send-gmail]').addEventListener('click', () => sendDraft('google', subj.value, bodyEl.value, showFlash));
+    wrap.querySelector('[data-act=send-ms]').addEventListener('click', () => sendDraft('microsoft', subj.value, bodyEl.value, showFlash));
+
+    container.appendChild(wrap);
+  });
 }
 
-async function sendDraft(provider, subject, bodyText) {
+async function sendDraft(provider, subject, body, showFlash) {
   const to = prompt('Recipient email (or leave blank for a self-draft):', '') || '';
   try {
-    const r = await api.emailDraft(provider, to, subject, bodyText);
-    alert(`Draft created (${provider}). ID: ${r.id}`);
+    const r = await api.emailDraft(provider, to, subject, body);
+    showFlash(`✓ ${provider} draft created (${r.id})`);
   } catch (e) {
-    alert(`${provider} draft failed: ${e.message}\n\nMake sure you connected the account in Settings.`);
+    showFlash(`${provider} draft failed — connect account in Settings`);
   }
 }
 
-// --- Demo panel ---
+// ============================================================
+// DEMO TAB
+// ============================================================
 const DEMO_JOBS = [
   {
     source: 'demo', externalId: 'demo-1', url: 'https://example.com/jobs/demo-1',
     title: 'Senior Full-Stack Engineer', company: 'Acme Robotics', location: 'Remote (EU)',
-    description: 'Build the operator console for our autonomous fleet. Stack: TypeScript, React, Node, Postgres, AWS. Looking for 5+ years and strong product instincts.',
+    description: 'Build the operator console for our autonomous fleet.',
     rating: 4, reasoning: 'Strong stack match; product instinct emphasis aligns with your background.',
     strengths: ['TypeScript + React (5+ yrs)', 'AWS / Postgres experience', 'Product-led delivery'],
     gaps: ['No robotics domain history'],
   },
   {
     source: 'demo', externalId: 'demo-2', url: 'https://example.com/jobs/demo-2',
-    title: 'Staff Engineer, Platform', company: 'Nimbus Data', location: 'London / Hybrid',
-    description: 'Owning the data plane for a real-time analytics platform. Go, Kafka, Kubernetes.',
-    rating: 2, reasoning: 'Stack mostly outside your strongest areas; senior level but different domain.',
-    strengths: ['Senior leadership experience'], gaps: ['No Go production work', 'Light on Kafka/K8s'],
-  },
-  {
-    source: 'demo', externalId: 'demo-3', url: 'https://example.com/jobs/demo-3',
     title: 'Founding Engineer (AI Tooling)', company: 'Brightside AI', location: 'Remote',
-    description: 'Help us ship a developer-facing AI workflow product. Looking for generalists who can do design, frontend, and backend.',
+    description: 'Help us ship a developer-facing AI workflow product.',
     rating: 5, reasoning: 'Founding-engineer generalist profile maps directly to your trajectory.',
     strengths: ['Generalist breadth', 'Shipping AI products', 'Early-stage mindset'],
     gaps: ['No formal founding-engineer title yet'],
   },
+  {
+    source: 'demo', externalId: 'demo-3', url: 'https://example.com/jobs/demo-3',
+    title: 'Staff Engineer, Platform', company: 'Nimbus Data', location: 'London / Hybrid',
+    description: 'Owning the data plane for a real-time analytics platform.',
+    rating: 2, reasoning: 'Stack mostly outside your strongest areas; senior level but different domain.',
+    strengths: ['Senior leadership experience'],
+    gaps: ['No Go production work', 'Light on Kafka/K8s'],
+  },
 ];
 
-document.getElementById('demo-go').addEventListener('click', () => {
-  const log = document.getElementById('demo-log');
-  log.textContent = '';
-  const steps = [
-    '🛰  Hunter: scanning 3 sample boards…',
-    '🔬 Scout: extracting structured fields (title, salary, requirements, tech stack)…',
-    '⭐ Rater: comparing to your resume + preferences…',
-    '✍  Writer: ready to draft a tailored letter if you click "Save & progress".',
-    '✅ Squad complete.',
-  ];
-  let i = 0;
-  const tick = () => {
-    if (i >= steps.length) {
-      renderSuggestions(JSON.parse(JSON.stringify(DEMO_JOBS)), document.getElementById('demo-results'));
-      return;
-    }
-    log.textContent += steps[i++] + '\n';
-    setTimeout(tick, 450);
-  };
-  tick();
+const demoBtn = document.getElementById('demo-go');
+const demoStatus = document.getElementById('demo-status');
+const demoLog = document.getElementById('demo-log');
+const demoLogBody = document.getElementById('demo-log-body');
+
+demoBtn.addEventListener('click', async () => {
+  demoBtn.classList.add('loading');
+  demoBtn.disabled = true;
+  demoStatus.textContent = 'Running…';
+  demoLog.style.display = 'block';
+  demoLogBody.innerHTML = '';
+  document.getElementById('demo-results').innerHTML = '';
+
+  const step = reduceMotion ? 0 : 420;
+  appendLog(demoLogBody, 'hunter', `scanning sample boards (acmerobotics, brightside, nimbus)…`);
+  await sleep(step);
+  appendLog(demoLogBody, 'scout', `extracting structured fields…`);
+  await sleep(step);
+  appendLog(demoLogBody, 'rater', `scoring against your resume + preferences…`);
+  await sleep(step);
+  appendLog(demoLogBody, 'writer', `standing by to draft tailored letters on demand.`, { muted: true });
+  await sleep(step);
+  appendLog(demoLogBody, 'mailman', `queue ready; nothing dispatched in demo mode.`, { muted: true });
+  await sleep(step / 2);
+  appendLog(demoLogBody, 'done', `squad complete.`);
+
+  renderSuggestions(JSON.parse(JSON.stringify(DEMO_JOBS)), document.getElementById('demo-results'));
+  demoStatus.textContent = `Returned ${DEMO_JOBS.length} sample role(s).`;
+  demoBtn.classList.remove('loading');
+  demoBtn.disabled = false;
 });
 
-// --- Settings tab ---
+// ============================================================
+// SETTINGS TAB
+// ============================================================
 document.querySelectorAll('input[name=provider]').forEach(r => {
   if (r.value === store.getProviderOverride()) r.checked = true;
   r.addEventListener('change', () => store.setProviderOverride(r.value));
@@ -373,21 +590,3 @@ document.getElementById('wipe-all').addEventListener('click', () => {
     location.reload();
   }
 });
-
-// --- Utilities ---
-function escapeHtml(s) {
-  return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-}
-function escapeAttr(s) {
-  return escapeHtml(s).replace(/'/g, '&#39;');
-}
-
-// Restore preference inputs from stored profile.
-(function restorePrefs() {
-  const p = store.getProfile().preferences || {};
-  document.getElementById('pref-titles').value = (p.titleKeywords || []).join(', ');
-  document.getElementById('pref-locations').value = (p.locations || []).join(', ');
-  document.getElementById('pref-exclude').value = (p.excludeKeywords || []).join(', ');
-  document.getElementById('pref-remote').checked = Boolean(p.remoteOnly);
-  document.getElementById('pref-salary').value = p.minSalary ?? '';
-})();
