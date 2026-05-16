@@ -89,7 +89,7 @@ button.danger { color:var(--bad); border-color:var(--bad); background:transparen
 
 <main>
   <div class="banner">
-    This is a fully <strong>static, client-side demo</strong> — no backend, no API keys. The five-agent squad is mocked in JS so you can click through the whole flow. Saved data persists in your browser's <code>localStorage</code>.
+    This is a fully <strong>static, client-side demo</strong> — no backend, no API keys, no storage. The five-agent squad is mocked in JS so you can click through the whole flow. State is in-memory only and resets on reload, so this file is safe to share.
   </div>
 
   <!-- HUNT -->
@@ -165,10 +165,10 @@ npm run dev   # http://localhost:8787</code></pre>
 </main>
 
 <script>
-// ---------- Storage ----------
-const KEY = 'job-agent-app-demo:v1';
-const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch { return {}; } };
-const save = (s) => localStorage.setItem(KEY, JSON.stringify(s));
+// ---------- Storage (in-memory only — resets on reload, so a shared copy starts clean) ----------
+let __state = {};
+const load = () => __state;
+const save = (s) => { __state = s; };
 
 const store = {
   getProfile() { return load().profile || { resume:'', introLetter:'', preferences:{} }; },
