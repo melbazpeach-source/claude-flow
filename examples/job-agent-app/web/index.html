@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Job Agent Squad</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header>
+  <h1>Job Agent Squad</h1>
+  <nav id="tabs">
+    <button data-tab="hunt" class="active">Hunt</button>
+    <button data-tab="saved">Saved</button>
+    <button data-tab="progress">Progress</button>
+    <button data-tab="demo">Demo</button>
+    <button data-tab="settings">Settings</button>
+  </nav>
+</header>
+
+<main>
+  <!-- HUNT -->
+  <section id="hunt" class="panel active">
+    <h2>Hunt for jobs</h2>
+    <p class="hint">Paste job-board URLs (Greenhouse, Lever, Ashby, Workable detected automatically) or individual job links. One per line.</p>
+    <textarea id="hunt-urls" rows="6" placeholder="https://boards.greenhouse.io/<company>&#10;https://jobs.lever.co/<company>/<id>"></textarea>
+
+    <fieldset>
+      <legend>Preferences</legend>
+      <label>Title keywords (comma-separated) <input id="pref-titles" placeholder="senior, staff, engineer" /></label>
+      <label>Locations <input id="pref-locations" placeholder="Remote, Berlin, London" /></label>
+      <label>Exclude keywords <input id="pref-exclude" placeholder="contract, intern" /></label>
+      <label><input type="checkbox" id="pref-remote" /> Remote only</label>
+      <label>Min salary (number, optional) <input id="pref-salary" type="number" /></label>
+    </fieldset>
+
+    <div class="actions">
+      <button id="hunt-go" class="primary">Hunt with squad</button>
+      <span id="hunt-status" class="status"></span>
+    </div>
+
+    <div id="hunt-results" class="suggestions"></div>
+  </section>
+
+  <!-- SAVED -->
+  <section id="saved" class="panel">
+    <h2>Saved jobs</h2>
+    <div id="saved-list" class="saved-list"></div>
+  </section>
+
+  <!-- PROGRESS -->
+  <section id="progress" class="panel">
+    <h2>Progress tool</h2>
+    <div class="progress-grid">
+      <div>
+        <h3>Resume / CV</h3>
+        <textarea id="profile-resume" rows="12" placeholder="Paste resume text or import…"></textarea>
+        <div class="actions">
+          <label class="btn">Import file<input id="resume-file" type="file" accept=".txt,.md" hidden /></label>
+          <button id="resume-export">Export .txt</button>
+        </div>
+      </div>
+      <div>
+        <h3>Default intro letter (style reference)</h3>
+        <textarea id="profile-intro" rows="12" placeholder="Paste your standard intro letter here…"></textarea>
+        <div class="actions">
+          <label class="btn">Import file<input id="intro-file" type="file" accept=".txt,.md" hidden /></label>
+          <button id="intro-export">Export .txt</button>
+        </div>
+      </div>
+    </div>
+
+    <h3>In-progress applications</h3>
+    <div id="progress-list" class="progress-list"></div>
+  </section>
+
+  <!-- DEMO -->
+  <section id="demo" class="panel">
+    <h2>Demo panel</h2>
+    <p class="hint">Run the full squad on built-in sample data so you can see the flow without API keys configured.</p>
+    <button id="demo-go" class="primary">Run demo squad</button>
+    <div id="demo-log" class="log"></div>
+    <div id="demo-results" class="suggestions"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="settings" class="panel">
+    <h2>Settings</h2>
+    <fieldset>
+      <legend>AI provider (per-request override)</legend>
+      <label><input type="radio" name="provider" value="" checked /> Server default</label>
+      <label><input type="radio" name="provider" value="anthropic" /> Anthropic</label>
+      <label><input type="radio" name="provider" value="openai" /> OpenAI</label>
+      <label><input type="radio" name="provider" value="ollama" /> Ollama</label>
+    </fieldset>
+    <fieldset>
+      <legend>Email connector</legend>
+      <div id="email-status">Checking…</div>
+      <div class="actions">
+        <button id="connect-google">Connect Gmail</button>
+        <button id="connect-ms">Connect Outlook</button>
+      </div>
+      <p class="hint">Configure OAuth client IDs in <code>.env</code> first. See <code>.env.example</code>.</p>
+    </fieldset>
+    <fieldset>
+      <legend>Data</legend>
+      <button id="export-all">Export all (JSON)</button>
+      <label class="btn">Import all (JSON)<input id="import-all" type="file" accept=".json" hidden /></label>
+      <button id="wipe-all" class="danger">Wipe local data</button>
+    </fieldset>
+  </section>
+</main>
+
+<template id="job-card-template">
+  <article class="job-card">
+    <header>
+      <div>
+        <h3 class="title"></h3>
+        <p class="meta"><span class="company"></span> · <span class="location"></span></p>
+      </div>
+      <div class="rating" aria-label="agent rating"></div>
+    </header>
+    <p class="reasoning"></p>
+    <details><summary>Strengths / gaps</summary>
+      <ul class="strengths"></ul>
+      <ul class="gaps"></ul>
+    </details>
+    <footer class="actions">
+      <a class="link" target="_blank" rel="noopener">Open listing</a>
+      <button class="discard">Discard</button>
+      <button class="save">Save</button>
+      <button class="progress primary">Save &amp; progress</button>
+    </footer>
+  </article>
+</template>
+
+<script type="module" src="api.js"></script>
+<script type="module" src="store.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

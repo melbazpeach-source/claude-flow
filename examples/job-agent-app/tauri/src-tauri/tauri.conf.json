@@ -1,0 +1,42 @@
+{
+  "build": {
+    "beforeDevCommand": "npm --prefix ../.. run start",
+    "beforeBuildCommand": "npm --prefix ../.. run build",
+    "devPath": "http://localhost:8787",
+    "distDir": "../../web"
+  },
+  "package": {
+    "productName": "Job Agent Squad",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "shell": { "open": true },
+      "dialog": { "open": true, "save": true }
+    },
+    "bundle": {
+      "active": true,
+      "identifier": "io.claudeflow.jobagent",
+      "icon": [
+        "icons/32x32.png",
+        "icons/128x128.png",
+        "icons/128x128@2x.png",
+        "icons/icon.icns",
+        "icons/icon.ico"
+      ],
+      "targets": "all"
+    },
+    "security": {
+      "csp": null
+    },
+    "windows": [
+      {
+        "title": "Job Agent Squad",
+        "width": 1200,
+        "height": 820,
+        "resizable": true
+      }
+    ]
+  }
+}
