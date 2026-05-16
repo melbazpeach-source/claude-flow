@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Job Agent Squad — Standalone Demo</title>
+<style>
+:root {
+  --bg: #0f1115; --panel: #161922; --panel-2: #1e2230;
+  --text: #e7ebf3; --muted: #8a93a6;
+  --accent: #6aa9ff; --accent-2: #4f8cf0;
+  --good: #5fd17f; --warn: #f0b35f; --bad: #ef6e6e;
+  --border: #2a2f3d;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg:#f6f7fb; --panel:#fff; --panel-2:#f0f2f7; --text:#1a1d24; --muted:#5b6173; --border:#e0e3ec; }
+}
+* { box-sizing: border-box; }
+body { margin:0; font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text); }
+header { padding:16px 24px; border-bottom:1px solid var(--border); background:var(--panel); }
+header h1 { margin:0 0 8px; font-size:18px; }
+header h1 .pill { font-size:11px; background:var(--accent-2); color:#fff; padding:2px 8px; border-radius:999px; margin-left:8px; vertical-align:middle; }
+nav#tabs { display:flex; gap:4px; flex-wrap:wrap; }
+nav#tabs button { background:transparent; border:1px solid transparent; color:var(--muted); padding:6px 12px; border-radius:6px; cursor:pointer; font:inherit; }
+nav#tabs button:hover { color:var(--text); }
+nav#tabs button.active { background:var(--panel-2); color:var(--text); border-color:var(--border); }
+main { max-width:1100px; margin:0 auto; padding:24px; }
+.panel { display:none; }
+.panel.active { display:block; }
+h2 { margin-top:0; }
+.hint { color:var(--muted); }
+textarea, input:not([type=checkbox]):not([type=radio]):not([type=file]) {
+  width:100%; background:var(--panel); color:var(--text); border:1px solid var(--border);
+  border-radius:6px; padding:8px 10px; font:inherit;
+}
+textarea { font-family:ui-monospace,Menlo,Consolas,monospace; resize:vertical; }
+fieldset { border:1px solid var(--border); border-radius:8px; margin:16px 0; padding:12px 16px; background:var(--panel); }
+fieldset label { display:block; margin:6px 0; font-size:13px; color:var(--muted); }
+fieldset label input { margin-top:4px; }
+fieldset legend { padding:0 6px; color:var(--text); }
+.actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:12px 0; }
+button, .btn { background:var(--panel-2); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:7px 12px; cursor:pointer; font:inherit; }
+button:hover, .btn:hover { border-color:var(--accent); }
+button.primary { background:var(--accent-2); border-color:var(--accent-2); color:white; }
+button.primary:hover { background:var(--accent); border-color:var(--accent); }
+button.danger { color:var(--bad); border-color:var(--bad); background:transparent; }
+.status { color:var(--muted); font-size:13px; }
+.suggestions, .saved-list, .progress-list { display:grid; gap:12px; margin-top:16px; }
+.job-card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
+.job-card > header { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; padding:0; border:0; background:transparent; }
+.job-card h3 { margin:0 0 4px; font-size:15px; }
+.job-card .meta { margin:0; color:var(--muted); font-size:12.5px; }
+.rating { white-space:nowrap; font-size:16px; letter-spacing:1px; }
+.star { color:var(--border); }
+.star.on { color:var(--warn); }
+.reasoning { margin:10px 0 6px; font-size:13.5px; }
+.job-card details { margin:6px 0; color:var(--muted); font-size:13px; }
+.job-card details summary { cursor:pointer; }
+.job-card ul { margin:6px 0 0 16px; padding:0; }
+.job-card ul.strengths li::marker { color:var(--good); }
+.job-card ul.gaps li::marker { color:var(--bad); }
+.job-card > footer.actions { margin-top:10px; padding-top:10px; border-top:1px solid var(--border); }
+.link { color:var(--accent); text-decoration:none; margin-right:auto; }
+.link:hover { text-decoration:underline; }
+.progress-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+@media (max-width:760px) { .progress-grid { grid-template-columns:1fr; } }
+.log { margin:10px 0; padding:10px; background:var(--panel); border:1px solid var(--border); border-radius:6px; font:12px/1.5 ui-monospace,Menlo,Consolas,monospace; white-space:pre-wrap; max-height:220px; overflow:auto; color:var(--muted); }
+.letter-edit { background:var(--panel-2); border:1px solid var(--border); border-radius:8px; padding:12px; margin-top:10px; }
+.letter-edit input, .letter-edit textarea { margin-bottom:8px; }
+.badge { display:inline-block; padding:2px 7px; border-radius:999px; font-size:11.5px; border:1px solid var(--border); color:var(--muted); margin-right:4px; }
+.badge.status-saved { color:var(--accent); border-color:var(--accent); }
+.badge.status-progress { color:var(--good); border-color:var(--good); }
+.badge.status-drafted { color:var(--warn); border-color:var(--warn); }
+.banner { background:var(--panel); border:1px solid var(--accent); color:var(--text); padding:10px 14px; border-radius:8px; margin-bottom:18px; font-size:13px; }
+.banner code { background:var(--panel-2); padding:1px 4px; border-radius:4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Job Agent Squad <span class="pill">standalone demo</span></h1>
+  <nav id="tabs">
+    <button data-tab="hunt" class="active">Hunt</button>
+    <button data-tab="saved">Saved</button>
+    <button data-tab="progress">Progress</button>
+    <button data-tab="demo">Demo</button>
+    <button data-tab="about">About</button>
+  </nav>
+</header>
+
+<main>
+  <div class="banner">
+    This is a fully <strong>static, client-side demo</strong> — no backend, no API keys. The five-agent squad is mocked in JS so you can click through the whole flow. Saved data persists in your browser's <code>localStorage</code>.
+  </div>
+
+  <!-- HUNT -->
+  <section id="hunt" class="panel active">
+    <h2>Hunt for jobs</h2>
+    <p class="hint">Paste any job-board URLs (one per line). In the real app these would hit Greenhouse / Lever / Ashby / Workable APIs or be parsed by the LLM. Here the agents return plausible synthetic results.</p>
+    <textarea id="hunt-urls" rows="5" placeholder="https://boards.greenhouse.io/acmerobotics&#10;https://jobs.lever.co/brightside&#10;https://jobs.ashbyhq.com/nimbus"></textarea>
+    <fieldset>
+      <legend>Preferences</legend>
+      <label>Title keywords <input id="pref-titles" placeholder="senior, staff, founding" /></label>
+      <label>Locations <input id="pref-locations" placeholder="Remote, Berlin" /></label>
+      <label>Exclude keywords <input id="pref-exclude" placeholder="contract, intern" /></label>
+      <label><input type="checkbox" id="pref-remote" /> Remote only</label>
+    </fieldset>
+    <div class="actions">
+      <button id="hunt-go" class="primary">Hunt with squad</button>
+      <span id="hunt-status" class="status"></span>
+    </div>
+    <div id="hunt-log" class="log" style="display:none"></div>
+    <div id="hunt-results" class="suggestions"></div>
+  </section>
+
+  <!-- SAVED -->
+  <section id="saved" class="panel">
+    <h2>Saved jobs</h2>
+    <div id="saved-list" class="saved-list"></div>
+  </section>
+
+  <!-- PROGRESS -->
+  <section id="progress" class="panel">
+    <h2>Progress tool</h2>
+    <div class="progress-grid">
+      <div>
+        <h3>Resume / CV</h3>
+        <textarea id="profile-resume" rows="10" placeholder="Paste resume text…"></textarea>
+      </div>
+      <div>
+        <h3>Default intro letter (style reference)</h3>
+        <textarea id="profile-intro" rows="10" placeholder="Paste your standard intro letter…"></textarea>
+      </div>
+    </div>
+    <h3>In-progress applications</h3>
+    <div id="progress-list" class="progress-list"></div>
+  </section>
+
+  <!-- DEMO -->
+  <section id="demo" class="panel">
+    <h2>Demo panel</h2>
+    <p class="hint">Run the full squad on built-in sample data with simulated agent narration.</p>
+    <button id="demo-go" class="primary">Run demo squad</button>
+    <div id="demo-log" class="log"></div>
+    <div id="demo-results" class="suggestions"></div>
+  </section>
+
+  <!-- ABOUT -->
+  <section id="about" class="panel">
+    <h2>About this demo</h2>
+    <p>This is a standalone HTML preview of the <strong>Job Agent Squad</strong> project. The real app has:</p>
+    <ul>
+      <li>A <strong>Node/Express backend</strong> that runs five agents (Hunter, Scout, Rater, Writer, Mailman) against Anthropic / OpenAI / Ollama.</li>
+      <li>Auto-detection of <strong>Greenhouse, Lever, Ashby, Workable</strong> boards via their public JSON APIs.</li>
+      <li><strong>Gmail + Outlook OAuth</strong> for creating email drafts.</li>
+      <li>A <strong>Tauri desktop shell</strong> wrapping the same web build.</li>
+    </ul>
+    <p>Code lives at <code>examples/job-agent-app/</code> on branch <code>claude/ai-job-agent-app-GawEn</code>.</p>
+    <p>To run the real thing locally:</p>
+    <pre style="background:var(--panel); padding:12px; border-radius:8px; border:1px solid var(--border); overflow:auto;"><code>git clone -b claude/ai-job-agent-app-GawEn &lt;repo&gt;
+cd claude-flow/examples/job-agent-app
+cp .env.example .env
+npm install
+npm run dev   # http://localhost:8787</code></pre>
+  </section>
+</main>
+
+<script>
+// ---------- Storage ----------
+const KEY = 'job-agent-app-demo:v1';
+const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch { return {}; } };
+const save = (s) => localStorage.setItem(KEY, JSON.stringify(s));
+
+const store = {
+  getProfile() { return load().profile || { resume:'', introLetter:'', preferences:{} }; },
+  setProfile(p) { const s = load(); s.profile = p; save(s); },
+  getSaved() { return load().saved || []; },
+  upsertSaved(job, status='saved') {
+    const s = load(); const list = s.saved || [];
+    const idx = list.findIndex(j => j.id === job.id);
+    const record = { ...job, status, savedAt: job.savedAt || new Date().toISOString() };
+    if (idx >= 0) list[idx] = record; else list.unshift(record);
+    s.saved = list; save(s); return record;
+  },
+  removeSaved(id) { const s = load(); s.saved = (s.saved||[]).filter(j => j.id !== id); save(s); },
+  updateLetter(id, letter) {
+    const s = load(); const list = s.saved || [];
+    const j = list.find(x => x.id === id);
+    if (j) { j.letter = letter; j.status = 'drafted'; }
+    save(s);
+  },
+};
+const ageString = iso => {
+  const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  if (d <= 0) return 'today'; if (d === 1) return '1 day ago';
+  if (d < 30) return `${d} days ago`; return `${Math.floor(d/30)}mo ago`;
+};
+
+// ---------- Mock agent squad ----------
+const COMPANIES = [
+  { co:'Acme Robotics', role:'Senior Full-Stack Engineer', loc:'Remote (EU)',
+    stack:['TypeScript','React','Node','Postgres','AWS'], desc:'Build the operator console for our autonomous fleet. 5+ yrs, product instinct, comfortable shipping end-to-end.' },
+  { co:'Brightside AI', role:'Founding Engineer', loc:'Remote',
+    stack:['Python','LLMs','Next.js','Postgres'], desc:'Help us ship a developer-facing AI workflow product. Generalists welcome — design, frontend, backend.' },
+  { co:'Nimbus Data', role:'Staff Engineer, Platform', loc:'London / Hybrid',
+    stack:['Go','Kafka','Kubernetes'], desc:'Owning the data plane for a real-time analytics platform. 7+ yrs systems experience.' },
+  { co:'Lumen Health', role:'Senior Frontend Engineer', loc:'Berlin / Hybrid',
+    stack:['TypeScript','React','Design Systems'], desc:'Lead the patient-facing app. Strong design partner, accessibility-first mindset.' },
+  { co:'Quill', role:'Product Engineer', loc:'Remote (Worldwide)',
+    stack:['TypeScript','React','tRPC','Postgres'], desc:'Small team, fast cycles. Generalist who likes shipping polished features end-to-end.' },
+  { co:'Northwind Labs', role:'Backend Engineer', loc:'Remote (US)',
+    stack:['Rust','gRPC','Postgres'], desc:'Performance-critical financial services. Strong CS fundamentals required.' },
+];
+
+function pickJobsFor(urls) {
+  // Pick a deterministic-ish set based on the URLs, with a couple of random extras.
+  const seed = urls.join('|').length;
+  const shuffled = [...COMPANIES].sort((a,b) => ((a.co + seed).length - (b.co + seed).length));
+  const count = Math.min(Math.max(urls.length, 3), 5);
+  return shuffled.slice(0, count).map((c, i) => ({
+    source: 'demo',
+    externalId: `demo-${seed}-${i}`,
+    url: urls[i % urls.length] || `https://example.com/jobs/${c.co.toLowerCase().replace(/\W+/g,'-')}`,
+    title: c.role, company: c.co, location: c.loc,
+    description: c.desc, techStack: c.stack,
+  }));
+}
+
+function rateJob(job, profile) {
+  const resume = (profile.resume || '').toLowerCase();
+  const prefs = profile.preferences || {};
+  const titleK = (prefs.titleKeywords || []).map(s => s.toLowerCase());
+  const excludeK = (prefs.excludeKeywords || []).map(s => s.toLowerCase());
+  const stack = (job.techStack || []).map(s => s.toLowerCase());
+  const text = (job.title + ' ' + job.description).toLowerCase();
+
+  // Score: +1 per resume keyword that appears in description, +1 per preferred title kw, -2 per excluded kw, +1 per stack match
+  const resumeWords = Array.from(new Set(resume.split(/[^a-z0-9+#.]+/i).filter(w => w.length > 3))).slice(0, 80);
+  let score = 0;
+  const strengths = [];
+  const gaps = [];
+
+  for (const s of stack) {
+    if (resumeWords.includes(s)) { score++; strengths.push(`Matches ${s}`); }
+    else gaps.push(`No clear ${s} signal in resume`);
+  }
+  for (const t of titleK) if (text.includes(t)) { score++; strengths.push(`Title matches "${t}"`); }
+  for (const x of excludeK) if (text.includes(x)) { score -= 2; gaps.push(`Mentions excluded "${x}"`); }
+  if (prefs.remoteOnly && !/remote/i.test(job.location || '')) { score -= 1; gaps.push('Not fully remote'); }
+
+  // Map to 1-5
+  let rating;
+  if (score >= 4) rating = 5;
+  else if (score >= 2) rating = 4;
+  else if (score >= 0) rating = 3;
+  else if (score >= -2) rating = 2;
+  else rating = 1;
+
+  if (!profile.resume?.trim()) rating = 3;  // No resume — neutral default.
+
+  const reasoning = !profile.resume?.trim()
+    ? 'No resume on file — add one in the Progress tab for a real rating.'
+    : strengths.length
+      ? `Solid match on ${strengths.slice(0,2).join(', ').toLowerCase()}.${gaps.length ? ' Some gaps to address.' : ''}`
+      : 'Plausible role but limited overlap with your resume signals.';
+
+  return { ...job, rating, reasoning, strengths: strengths.slice(0,4), gaps: gaps.slice(0,3) };
+}
+
+function draftLetter(job, profile) {
+  const resume = (profile.resume || '').trim();
+  const intro = (profile.introLetter || '').trim();
+  const lines = resume.split('\n').map(s => s.trim()).filter(Boolean);
+  const headline = lines[0] || 'Experienced engineer';
+  const sample = lines.slice(1, 4).filter(l => l.length > 20).slice(0, 2);
+
+  const opener = intro
+    ? intro.split('\n').slice(0, 2).join(' ')
+    : `I'm reaching out about the ${job.title} role at ${job.company}.`;
+
+  const body = [
+    `Dear ${job.company} hiring team,`,
+    '',
+    opener,
+    '',
+    `As a ${headline.toLowerCase()}, I was drawn to your focus on ${job.description.split('.')[0].toLowerCase()}.${sample.length ? ' A few relevant data points from my background:' : ''}`,
+    ...sample.map(s => `• ${s}`),
+    '',
+    `Your stack — ${(job.techStack||[]).join(', ')} — overlaps directly with how I work today, and the scope of the role feels well-matched to where I want to grow next.`,
+    '',
+    `I'd love to learn more about the team. Happy to share my resume or jump on a quick intro call at your convenience.`,
+    '',
+    `Best,`,
+    `[Your name]`,
+  ].join('\n');
+
+  return { subject: `Application — ${job.title} @ ${job.company}`, body };
+}
+
+// ---------- Tab routing ----------
+document.querySelectorAll('#tabs button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const target = btn.dataset.tab;
+    document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b === btn));
+    document.querySelectorAll('main > section.panel').forEach(s => s.classList.toggle('active', s.id === target));
+    if (target === 'saved') renderSaved();
+    if (target === 'progress') renderProgress();
+  });
+});
+
+// ---------- Profile binding ----------
+const resumeEl = document.getElementById('profile-resume');
+const introEl = document.getElementById('profile-intro');
+const profile = store.getProfile();
+resumeEl.value = profile.resume || '';
+introEl.value = profile.introLetter || '';
+if (!profile.resume) {
+  resumeEl.value = `Senior product engineer with 8+ years shipping consumer and developer-facing web apps.\nLed a team of 5 building a TypeScript/React design system used across 12 internal apps.\nBuilt a real-time collaboration backend on Node + Postgres + WebSockets serving 40k MAU.\nComfortable with AWS, infra-as-code, and end-to-end ownership.\nStrong product instinct; prefer small teams and fast cycles.`;
+  introEl.value = `I'm a product-minded engineer who likes joining small teams and shipping polished things quickly.`;
+}
+function persistProfile() {
+  store.setProfile({
+    resume: resumeEl.value,
+    introLetter: introEl.value,
+    preferences: collectPrefs(),
+  });
+}
+resumeEl.addEventListener('input', persistProfile);
+introEl.addEventListener('input', persistProfile);
+persistProfile();
+
+function collectPrefs() {
+  const split = s => s.split(',').map(x => x.trim()).filter(Boolean);
+  return {
+    titleKeywords: split(document.getElementById('pref-titles').value),
+    locations: split(document.getElementById('pref-locations').value),
+    excludeKeywords: split(document.getElementById('pref-exclude').value),
+    remoteOnly: document.getElementById('pref-remote').checked,
+  };
+}
+
+// ---------- Hunt ----------
+const huntStatus = document.getElementById('hunt-status');
+const huntLog = document.getElementById('hunt-log');
+
+document.getElementById('hunt-go').addEventListener('click', async () => {
+  const urls = document.getElementById('hunt-urls').value.split('\n').map(s => s.trim()).filter(Boolean);
+  if (!urls.length) {
+    document.getElementById('hunt-urls').value = 'https://boards.greenhouse.io/acmerobotics\nhttps://jobs.lever.co/brightside\nhttps://jobs.ashbyhq.com/nimbus';
+    return;
+  }
+  persistProfile();
+  huntStatus.textContent = 'Squad working…';
+  huntLog.style.display = 'block';
+  huntLog.textContent = '';
+  document.getElementById('hunt-results').innerHTML = '';
+
+  const steps = [
+    `🛰  Hunter: scanning ${urls.length} board(s)…`,
+    '🔬 Scout: extracting title, salary, requirements, tech stack…',
+    '⭐ Rater: comparing against your resume + preferences…',
+    '✅ Squad complete.',
+  ];
+  for (const s of steps) {
+    huntLog.textContent += s + '\n';
+    await sleep(420);
+  }
+
+  const profile = store.getProfile();
+  const jobs = pickJobsFor(urls).map(j => rateJob(j, profile));
+  renderSuggestions(jobs, document.getElementById('hunt-results'));
+  huntStatus.textContent = `Found ${jobs.length} job(s).`;
+});
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// ---------- Suggestions rendering ----------
+function renderStars(rating) {
+  const r = Math.max(1, Math.min(5, Math.round(rating || 3)));
+  return Array.from({length:5}, (_,i) => `<span class="star ${i < r ? 'on' : ''}">★</span>`).join('');
+}
+function jobId(job) { return `${job.source || 'x'}-${job.externalId || job.url}`; }
+function escapeHtml(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function escapeAttr(s) { return escapeHtml(s).replace(/'/g, '&#39;'); }
+
+function renderSuggestions(jobs, container) {
+  container.innerHTML = '';
+  for (const job of jobs) {
+    job.id = jobId(job);
+    const node = document.createElement('article');
+    node.className = 'job-card';
+    node.innerHTML = `
+      <header>
+        <div>
+          <h3>${escapeHtml(job.title)}</h3>
+          <p class="meta"><span>${escapeHtml(job.company)}</span> · <span>${escapeHtml(job.location || '—')}</span></p>
+        </div>
+        <div class="rating" title="${escapeAttr(job.reasoning)}">${renderStars(job.rating)}</div>
+      </header>
+      <p class="reasoning">${escapeHtml(job.reasoning)}</p>
+      <details><summary>Strengths / gaps</summary>
+        <ul class="strengths">${(job.strengths||[]).map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul>
+        <ul class="gaps">${(job.gaps||[]).map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul>
+      </details>
+      <footer class="actions">
+        <a class="link" href="${escapeAttr(job.url)}" target="_blank" rel="noopener">Open listing</a>
+        <button data-act="discard">Discard</button>
+        <button data-act="save">Save</button>
+        <button data-act="progress" class="primary">Save &amp; progress</button>
+        <span class="flash status"></span>
+      </footer>`;
+    node.querySelector('[data-act=discard]').addEventListener('click', () => node.remove());
+    node.querySelector('[data-act=save]').addEventListener('click', () => {
+      store.upsertSaved(job, 'saved');
+      node.querySelector('.flash').textContent = 'Saved';
+    });
+    node.querySelector('[data-act=progress]').addEventListener('click', async () => {
+      store.upsertSaved(job, 'progress');
+      const flash = node.querySelector('.flash'); flash.textContent = 'Drafting letter…';
+      await sleep(600);
+      const letter = draftLetter(job, store.getProfile());
+      store.updateLetter(job.id, letter);
+      flash.textContent = 'Letter drafted — see Progress tab';
+    });
+    container.appendChild(node);
+  }
+}
+
+// ---------- Saved tab ----------
+function renderSaved() {
+  const container = document.getElementById('saved-list');
+  container.innerHTML = '';
+  const saved = store.getSaved();
+  if (!saved.length) {
+    container.innerHTML = '<p class="hint">No saved jobs yet. Hunt or run the Demo first.</p>'; return;
+  }
+  for (const job of saved) {
+    const wrap = document.createElement('article');
+    wrap.className = 'job-card';
+    wrap.innerHTML = `
+      <header>
+        <div>
+          <h3>${escapeHtml(job.title)}</h3>
+          <p class="meta">
+            <span>${escapeHtml(job.company)}</span> · <span>${escapeHtml(job.location || '—')}</span>
+            · <span>${ageString(job.savedAt)}</span>
+            · <span class="badge status-${job.status}">${job.status}</span>
+          </p>
+        </div>
+        <div class="rating">${renderStars(job.rating)}</div>
+      </header>
+      <p class="reasoning">${escapeHtml(job.reasoning || '')}</p>
+      <footer class="actions">
+        <a class="link" target="_blank" rel="noopener" href="${escapeAttr(job.url)}">Open listing</a>
+        <button data-act="progress">Progress (draft letter)</button>
+        <button data-act="remove" class="danger">Remove</button>
+      </footer>`;
+    wrap.querySelector('[data-act=remove]').addEventListener('click', () => { store.removeSaved(job.id); renderSaved(); });
+    wrap.querySelector('[data-act=progress]').addEventListener('click', async () => {
+      const btn = wrap.querySelector('[data-act=progress]');
+      btn.textContent = 'Drafting…';
+      await sleep(500);
+      const letter = draftLetter(job, store.getProfile());
+      store.updateLetter(job.id, letter);
+      renderSaved(); renderProgress();
+      alert('Letter drafted — see Progress tab');
+    });
+    container.appendChild(wrap);
+  }
+}
+
+// ---------- Progress tab ----------
+function renderProgress() {
+  const container = document.getElementById('progress-list');
+  container.innerHTML = '';
+  const items = store.getSaved().filter(j => j.status === 'progress' || j.status === 'drafted');
+  if (!items.length) {
+    container.innerHTML = '<p class="hint">Nothing in progress yet. Hunt or Demo, then click "Save &amp; progress" on a job.</p>'; return;
+  }
+  for (const job of items) {
+    const wrap = document.createElement('article');
+    wrap.className = 'job-card';
+    wrap.innerHTML = `
+      <header>
+        <div>
+          <h3>${escapeHtml(job.title)}</h3>
+          <p class="meta">
+            <span>${escapeHtml(job.company)}</span> · <span>${escapeHtml(job.location || '—')}</span>
+            · <span class="badge status-${job.status}">${job.status}</span>
+          </p>
+        </div>
+        <div class="rating">${renderStars(job.rating)}</div>
+      </header>
+      <div class="letter-edit">
+        <label>Subject<input class="subj" value="${escapeAttr(job.letter?.subject || `Application — ${job.title} @ ${job.company}`)}" /></label>
+        <label>Body<textarea class="body" rows="12">${escapeHtml(job.letter?.body || '')}</textarea></label>
+        <div class="actions">
+          <button data-act="save-letter" class="primary">Save edits</button>
+          <button data-act="regen">Re-draft</button>
+          <button data-act="copy">Copy</button>
+          <button data-act="export">Export .eml</button>
+        </div>
+      </div>`;
+    const subj = wrap.querySelector('.subj');
+    const body = wrap.querySelector('.body');
+    wrap.querySelector('[data-act=save-letter]').addEventListener('click', () => {
+      store.updateLetter(job.id, { subject: subj.value, body: body.value });
+      alert('Saved.');
+    });
+    wrap.querySelector('[data-act=regen]').addEventListener('click', async () => {
+      await sleep(400);
+      const letter = draftLetter(job, store.getProfile());
+      subj.value = letter.subject; body.value = letter.body;
+      store.updateLetter(job.id, letter);
+    });
+    wrap.querySelector('[data-act=copy]').addEventListener('click', () => navigator.clipboard.writeText(body.value));
+    wrap.querySelector('[data-act=export]').addEventListener('click', () => {
+      const eml = `Subject: ${subj.value}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${body.value}`;
+      const blob = new Blob([eml], { type: 'message/rfc822' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${job.company}-${job.title}.eml`.replace(/[^a-z0-9.-]+/gi,'_');
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+    container.appendChild(wrap);
+  }
+}
+
+// ---------- Demo tab ----------
+document.getElementById('demo-go').addEventListener('click', async () => {
+  const log = document.getElementById('demo-log');
+  log.textContent = '';
+  const steps = [
+    '🛰  Hunter: scanning sample boards (acmerobotics, brightside, nimbus, lumen)…',
+    '🔬 Scout: extracting structured fields…',
+    '⭐ Rater: scoring against your resume + preferences…',
+    '✍  Writer: standing by to draft tailored letters on demand.',
+    '✅ Squad complete.',
+  ];
+  for (const s of steps) { log.textContent += s + '\n'; await sleep(420); }
+  const profile = store.getProfile();
+  const jobs = pickJobsFor(['demo:greenhouse','demo:lever','demo:ashby','demo:workable']).map(j => rateJob(j, profile));
+  renderSuggestions(jobs, document.getElementById('demo-results'));
+});
+</script>
+</body>
+</html>
