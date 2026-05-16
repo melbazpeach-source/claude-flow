@@ -25,4 +25,29 @@ export const api = {
   tailor: (job, profile, parsed, hints, provider) => post('/api/letters/tailor', { job, profile, parsed, hints, provider }),
   emailStatus: () => get('/api/email/status'),
   emailDraft: (provider, to, subject, body) => post('/api/email/draft', { provider, to, subject, body }),
+  // DB-backed storage
+  getProfile: () => get('/api/profile'),
+  putProfile: (profile) => put('/api/profile', profile),
+  listJobs: () => get('/api/jobs'),
+  putJob: (job) => put(`/api/jobs/${encodeURIComponent(job.id)}`, job),
+  patchJob: (id, patch) => patch(`/api/jobs/${encodeURIComponent(id)}`, patch),
+  deleteJob: (id) => del(`/api/jobs/${encodeURIComponent(id)}`),
+  importStorage: (dump) => post('/api/storage/import', dump),
+  storageHealth: () => get('/api/storage/health'),
 };
+
+async function put(path, body) {
+  const r = await fetch(API + path, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(`${path} ${r.status}: ${await r.text()}`);
+  return r.json();
+}
+async function patch(path, body) {
+  const r = await fetch(API + path, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(`${path} ${r.status}: ${await r.text()}`);
+  return r.json();
+}
+async function del(path) {
+  const r = await fetch(API + path, { method: 'DELETE' });
+  if (!r.ok) throw new Error(`${path} ${r.status}: ${await r.text()}`);
+  return r.json();
+}

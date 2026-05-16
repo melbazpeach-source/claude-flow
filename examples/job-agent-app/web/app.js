@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { store, ageString } from './store.js';
+import { store, ageString, hydrateStore, legacyDump, importLegacy } from './store.js';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -72,13 +72,10 @@ function appendLog(bodyEl, agent, msg, opts = {}) {
 }
 
 // ============================================================
-// PROFILE BINDING (Progress tab)
+// PROFILE BINDING (Progress tab) — seeded after hydrateStore()
 // ============================================================
 const resumeEl = document.getElementById('profile-resume');
 const introEl = document.getElementById('profile-intro');
-const seed = store.getProfile();
-resumeEl.value = seed.resume || '';
-introEl.value = seed.introLetter || '';
 
 function collectPrefs() {
   const split = s => s.split(',').map(x => x.trim()).filter(Boolean);
@@ -101,7 +98,6 @@ resumeEl.addEventListener('input', persistProfile);
 introEl.addEventListener('input', persistProfile);
 
 const hintsEl = document.getElementById('profile-hints');
-hintsEl.value = store.getHints();
 hintsEl.addEventListener('input', () => store.setHints(hintsEl.value));
 
 const parseStatus = document.getElementById('parse-status');
@@ -142,15 +138,93 @@ function downloadText(name, content) {
   URL.revokeObjectURL(a.href);
 }
 
-// Restore preference inputs from stored profile.
-(function restorePrefs() {
-  const p = store.getProfile().preferences || {};
+function seedInputsFromStore() {
+  const profile = store.getProfile();
+  resumeEl.value = profile.resume || '';
+  introEl.value = profile.introLetter || '';
+  hintsEl.value = store.getHints();
+  const p = profile.preferences || {};
   document.getElementById('pref-titles').value = (p.titleKeywords || []).join(', ');
   document.getElementById('pref-locations').value = (p.locations || []).join(', ');
   document.getElementById('pref-exclude').value = (p.excludeKeywords || []).join(', ');
   document.getElementById('pref-remote').checked = Boolean(p.remoteOnly);
   document.getElementById('pref-salary').value = p.minSalary ?? '';
-})();
+  // Seed provider radios too.
+  document.querySelectorAll('input[name=provider]').forEach(r => {
+    r.checked = r.value === store.getProviderOverride();
+  });
+}
+
+// Banner rendering for DB state + legacy import.
+function renderBootBanners() {
+  const main = document.querySelector('main');
+  let host = document.getElementById('boot-banners');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'boot-banners';
+    main.parentElement.insertBefore(host, main);
+  }
+  host.innerHTML = '';
+
+  if (!store.isDbReachable()) {
+    const b = document.createElement('div');
+    b.className = 'banner banner-warn';
+    b.innerHTML = `<span class="banner-icon">DB</span>
+      <div>
+        <strong>Database not reachable.</strong> Saved jobs, tailored CVs, and watchlists won't persist this session.
+        Set <code>DATABASE_URL</code> in <code>.env</code> (Neon connection string) and restart the server. If you already have one set, check that your Neon project's IP allowlist includes this machine.
+        <div class="actions" style="margin-top:8px">
+          <button data-act="retry-db">Retry connection</button>
+        </div>
+      </div>`;
+    b.querySelector('[data-act=retry-db]').addEventListener('click', async () => {
+      await hydrateStore();
+      seedInputsFromStore();
+      renderBootBanners();
+    });
+    host.appendChild(b);
+  }
+
+  const dump = legacyDump();
+  if (dump && store.getSaved().length === 0 && store.isDbReachable()) {
+    const b = document.createElement('div');
+    b.className = 'banner';
+    const jobCount = (dump.saved || []).length;
+    b.innerHTML = `<span class="banner-icon">↦</span>
+      <div>
+        <strong>Found data from a previous version.</strong> Import ${jobCount} saved job${jobCount === 1 ? '' : 's'} and your profile into the database?
+        <div class="actions" style="margin-top:8px">
+          <button data-act="import" class="primary">Import</button>
+          <button data-act="dismiss">Discard</button>
+        </div>
+      </div>`;
+    b.querySelector('[data-act=import]').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      btn.classList.add('loading');
+      try {
+        const r = await importLegacy(dump);
+        seedInputsFromStore();
+        b.remove();
+        renderBootBanners();
+        console.log(`Imported ${r.jobs} job(s), profile=${r.profile}`);
+      } catch (err) {
+        btn.classList.remove('loading');
+        alert(`Import failed: ${err.message}`);
+      }
+    });
+    b.querySelector('[data-act=dismiss]').addEventListener('click', () => {
+      if (confirm('Discard the previous-version data permanently?')) {
+        try { localStorage.removeItem('job-agent-app:v1'); } catch {}
+        b.remove();
+      }
+    });
+    host.appendChild(b);
+  }
+}
+
+await hydrateStore();
+seedInputsFromStore();
+renderBootBanners();
 
 // ============================================================
 // HUNT — calls real backend, narrates around the fetch
@@ -658,18 +732,18 @@ window.addEventListener('message', e => {
   if (e.data?.type === 'oauth') refreshEmailStatus();
 });
 
-document.getElementById('export-all').addEventListener('click', () => {
-  downloadText('job-agent-data.json', store.exportAll());
+document.getElementById('export-all').addEventListener('click', async () => {
+  downloadText('job-agent-data.json', await store.exportAll());
 });
 document.getElementById('import-all').addEventListener('change', async e => {
   const f = e.target.files?.[0];
   if (!f) return;
-  store.importAll(await f.text());
+  await store.importAll(await f.text());
   location.reload();
 });
-document.getElementById('wipe-all').addEventListener('click', () => {
-  if (confirm('Delete all local data?')) {
-    store.wipe();
+document.getElementById('wipe-all').addEventListener('click', async () => {
+  if (confirm('Delete all data (server + local)?')) {
+    await store.wipe();
     location.reload();
   }
 });

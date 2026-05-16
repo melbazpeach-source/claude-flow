@@ -15,6 +15,18 @@ import {
   emailStatus,
 } from './email.js';
 import { detectAts, fetchRawHtml } from './ats.js';
+import {
+  getProfileRow,
+  setProfileRow,
+  listJobs,
+  getJob,
+  upsertJob,
+  patchJob,
+  deleteJob,
+  importDump,
+  storageHealth,
+} from './storage.js';
+import { hasDb } from './db/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -29,7 +41,51 @@ app.get('/api/health', (_req, res) => {
     provider: process.env.AI_PROVIDER || 'anthropic',
     hasAnthropic: Boolean(process.env.ANTHROPIC_API_KEY),
     hasOpenAI: Boolean(process.env.OPENAI_API_KEY),
+    hasDb: hasDb(),
   });
+});
+
+// ---------- storage / DB-backed CRUD ----------
+function dbErr(res: any, e: any) {
+  if (e?.code === 'NO_DB') return res.status(503).json({ error: 'DATABASE_URL not configured' });
+  console.error(e);
+  return res.status(500).json({ error: String(e.message || e) });
+}
+
+app.get('/api/storage/health', async (_req, res) => res.json(await storageHealth()));
+
+app.get('/api/profile', async (_req, res) => {
+  try { res.json({ profile: await getProfileRow() }); } catch (e: any) { dbErr(res, e); }
+});
+app.put('/api/profile', async (req, res) => {
+  try { res.json({ profile: await setProfileRow(req.body || {}) }); } catch (e: any) { dbErr(res, e); }
+});
+
+app.get('/api/jobs', async (_req, res) => {
+  try { res.json({ jobs: await listJobs() }); } catch (e: any) { dbErr(res, e); }
+});
+app.get('/api/jobs/:id', async (req, res) => {
+  try {
+    const j = await getJob(req.params.id);
+    if (!j) return res.status(404).json({ error: 'not found' });
+    res.json({ job: j });
+  } catch (e: any) { dbErr(res, e); }
+});
+app.put('/api/jobs/:id', async (req, res) => {
+  try {
+    const job = { ...(req.body || {}), id: req.params.id };
+    res.json({ job: await upsertJob(job) });
+  } catch (e: any) { dbErr(res, e); }
+});
+app.patch('/api/jobs/:id', async (req, res) => {
+  try { res.json({ job: await patchJob(req.params.id, req.body || {}) }); } catch (e: any) { dbErr(res, e); }
+});
+app.delete('/api/jobs/:id', async (req, res) => {
+  try { await deleteJob(req.params.id); res.json({ ok: true }); } catch (e: any) { dbErr(res, e); }
+});
+
+app.post('/api/storage/import', async (req, res) => {
+  try { res.json(await importDump(req.body || {})); } catch (e: any) { dbErr(res, e); }
 });
 
 app.post('/api/jobs/hunt', async (req, res) => {
