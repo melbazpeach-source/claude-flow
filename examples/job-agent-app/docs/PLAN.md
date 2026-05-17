@@ -392,25 +392,80 @@ Intentionally left out:
 - Skills-depreciation tracker (Coach surfaces this as needed)
 - Cohort/community layer (loneliness is real, social network is a
   different product)
-- Day-1-of-new-job prep (system goes quiet when user lands; respect that)
+- Day-1-of-new-job prep (system goes quiet once they've got the mahi; respect that)
 
-## Scope: job-hunt v1, career-companion v2 (hooks now)
+## Scope: monorepo with two products + career-companion deferred
 
-**v1 stays focused on job-hunting.** The ethical north star — user
-lands a job and doesn't need us until next time — holds. v2 (career-
-companion: in-role promotions, payrises, ongoing visibility coaching)
-is filed as a real future pivot, not an additive feature.
+**One repo, two products, a shared core.** Decided architecture for
+the next phase. The ethical separation matters — candidate and
+employer products optimise for different masters and must hold
+different opinions about whose interests they serve — but the
+engineering separation doesn't need to mean duplicate infrastructure.
 
-But we bake in hooks now so v2 isn't a rewrite:
+```
+examples/job-agent-app/
+  packages/
+    core/              ← shared agents, schema, ATS detectors, provider
+    gym-candidate/     ← G.Y.M. — candidate-side, what we have today
+    employer-panel/    ← employer-side, Mark Kashef as design partner
+```
 
-### Hooks added in v1
+### The two products
+
+- **G.Y.M. (Get Ya Mahi)** — candidate-side. The product we've been
+  building. Helps a person whose runway is measured in weeks land a
+  job. Ethical north star: user gets the mahi and doesn't need us until
+  next time.
+- **Employer-Panel** — employer-side. Design partner: Mark Kashef
+  (Skool community). Helps employers write better JDs, evaluate
+  applicants, run a fair hiring process. Different brand (TBD),
+  different positioning, different pricing model.
+
+Same Postgres, same agents, same ATS detectors — but separate UI
+shells, separate auth scopes, separate deploys. The shared `core/`
+package holds whatever's universally true (Rater, Hunter, schema
+types, provider abstraction).
+
+### Architectural symmetry — the employer side reuses most agents
+
+| Candidate-side agent      | Employer-side inversion                       |
+| ------------------------- | --------------------------------------------- |
+| **Hunter** — scrapes JDs  | **Composer** — *writes* the JD against intent |
+| **Scout** — extracts fields | **Validator** — checks JD for ATS-friendliness + bias language |
+| **Rater** — scores job × candidate | **same Rater inverted** — scores candidate × JD |
+| **Tailor** — tailors CV for a job | **Sourcer** — surfaces best candidates from applied pool |
+| **Writer** — drafts cover letter | **Reply-er** — drafts personalised candidate responses |
+| **Mailman** — sends drafts | **Mailman** — unchanged                        |
+
+### When the restructure happens
+
+Not now. Phase 2a just shipped; Phase 2b (Sentinel + Today) gets
+built in the current `examples/job-agent-app/` layout. Restructure
+into packages happens **when Mark's collab actually needs
+employer-panel code** — at which point we extract `core/` and move
+the existing candidate code into `packages/gym-candidate/` in a
+single PR. Premature monorepo-ification is worse than copying when
+the time comes.
+
+What we *do* now to make the future restructure cheap:
+- Keep agents in `server/agents.ts` self-contained — no UI/route
+  coupling. The file already follows this discipline.
+- Keep the Drizzle schema in `server/db/schema.ts` framework-agnostic.
+- Avoid hard-coding G.Y.M.-specific copy/branding into agent prompts;
+  keep brand strings in a single `branding.ts`-style module.
+
+### Hooks for career-companion v2 (G.Y.M. only, not employer-panel)
+
+In-role coaching (promotions, payrises, visibility) remains a
+hypothetical v2 for the candidate product specifically. We still bake
+the same hooks in:
 
 - **Dreams sheet at onboarding** (already promoted to Stage 1) — the
   long-term aspiration data that Career-paths v1 and in-role coaching
   v2 both read from.
-- **`Landed` as a real pipeline state, not an archive.** When the user
-  accepts an offer, the job becomes their current position rather than
-  disappearing from view. Activity-events keep accumulating.
+- **`Got the mahi` as a real pipeline state, not an archive.** When
+  the user accepts an offer, the job becomes their current position
+  rather than disappearing from view. Activity-events keep accumulating.
 - **Onboarding asks "are you currently employed?" and "when do you
   want to next move?"** — captures the user's relationship to
   job-hunting so v2 can flip the product mode without re-onboarding.
@@ -418,7 +473,7 @@ But we bake in hooks now so v2 isn't a rewrite:
   events later (promotion granted, salary change, milestone) with
   zero migrations.
 
-### What ships in v1 from the new batch
+### What ships in G.Y.M. v1 from the most recent batch
 
 - **Dressed for success** — Stage 2 presence package alongside Zoom
   backdrop + video. Industry/region/role-aware styling (NZ tech =
@@ -427,20 +482,19 @@ But we bake in hooks now so v2 isn't a rewrite:
   2-3 routes from current role to long-term aspiration, with the next
   2 steps mapped. No in-role coaching yet — that's the v2 line.
 
-### What's explicitly deferred to v2
+### What's explicitly deferred to G.Y.M. v2 (candidate-side)
 
 - Getting promotions
 - Getting payrises
 - In-role visibility / scope coaching
-- Employer panel (was Stage 3 in earlier plan version)
 
 ### What's explicitly dropped, not deferred
 
 - **Legal assist agent of any shape.** Translation, signposting,
-  contract reading — all out for v1. Practising law without a licence
-  is illegal in most jurisdictions; LLMs hallucinating legal advice
-  has real harm potential. If we ever add it, it's via partnership
-  with a real legal service, not an in-house agent.
+  contract reading — all out. Practising law without a licence is
+  illegal in most jurisdictions; LLMs hallucinating legal advice has
+  real harm potential. If we ever add it, it's via partnership with
+  a real legal service, never an in-house agent.
 
 ## Resequencing the phases
 
