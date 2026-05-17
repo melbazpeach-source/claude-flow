@@ -1,4 +1,10 @@
-# Job Agent Squad — Designing for the user who has to eat
+# G.Y.M. — Get Ya Mahi
+
+*The kiwi "get a job or die trying" version. Mahi = work, in te reo Māori.
+"Job Agent Squad" remains the internal codebase name; G.Y.M. is the
+NZ-facing product brand.*
+
+## Designing for the user who has to eat
 
 A reset on the remaining phases now that we know what we're really building.
 This continues the work already shipped (5 base agents, Tailor, Phase 2a
