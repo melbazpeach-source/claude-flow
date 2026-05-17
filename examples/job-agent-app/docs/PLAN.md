@@ -122,14 +122,84 @@ Quest:
 anything." Cards stop, banners stop, nudges stop. The system
 understands fatigue is real and respects it.
 
+## Market reality: NZ first-tranche dynamics
+
+The "less, but better" frame above is necessary but not sufficient.
+In the NZ market specifically, getting your application into the
+**first ~10 received** is what gets you read at all. After that,
+attention drops sharply — a beautifully tailored application that
+arrives 11th can be functionally invisible. Quality *and* speed
+both matter.
+
+This forces a redesign of how Sentinel and Tailor interact:
+
+### Pre-emptive tailoring
+
+When Sentinel finds a new role *at a watched company* and the Rater
+scores it ≥4/5, the Tailor agent fires in the background
+immediately — before the user sees the notification. By the time
+the user opens the alert, the CV + cover letter are 90% drafted.
+This shifts the user's job from "spend an hour building an
+application" to "spend 15 minutes reviewing and personalising one."
+
+### First-tranche mode (a fast lane through the UX)
+
+A deliberately stripped variant of the single-job workspace:
+notification → review pre-tailored packet → quick letter edit → submit.
+Under an hour, end to end. The user opts in per-application
+("this just dropped, fast lane it"). The careful-craft workspace
+remains the default for everything else.
+
+### Sentinel cadence revised
+
+The brief's two-tier "hourly collect, daily digest" pattern is
+wrong for first-tranche dynamics. Revised:
+
+- **Critical tier** (Rater ≥4/5 at watched company) → near-real-time
+  push (browser/desktop notification, in-app banner). Subject to
+  pause-button override.
+- **Standard tier** (everything else from Sentinel) → daily digest as
+  originally planned.
+
+Polling frequency on watched companies tightens to ~15 minutes for
+the critical path; everything else stays hourly.
+
+### Pipeline tracking gets a speed dimension
+
+New per-application metrics:
+- `applied_at - posted_at` — time-to-apply, the proxy when ATS
+  position data isn't visible.
+- `applied_at_rank` when leakage allows it (LinkedIn ranges, some
+  ATS counters, Workable's "100+ applicants" thresholds).
+
+Coach uses these as inputs: "your fastest applications got more
+callbacks; the careful ones didn't" is a falsifiable claim the
+system can make once we have ~20 data points.
+
+### The pause button still wins
+
+Critical-tier push can wait 24 hours. The pause button is sacred —
+the system never breaks the user's quiet hours even if it costs a
+tranche slot. The user can disable pause if they want, but the
+default is inviolable. This is the ethical line and it must hold.
+
+### Markets other than NZ
+
+The same speed dynamics apply differently elsewhere — US tech
+roles get 100+ applications in days, not hours, so first-tranche
+matters less there than thoughtful tailoring. EU markets vary by
+country. The system should make the speed-vs-care balance a per-user
+setting, default to "match my market" detected from preferred
+locations, and let the user explicitly tune it.
+
 ## Resequencing the phases
 
-| Phase | Was             | Now                                              |
-| ----- | --------------- | ------------------------------------------------ |
-| 2b    | Sentinel        | **Sentinel + Today screen** — biggest UX leap    |
-| 3     | Quest           | **Interview-Prep + Single-job workspace**         |
-| 4     | (was 4)         | **Coach + Pause + slim Quest**                   |
-| 5     | (new)           | **Negotiator + Follow-Upper + Connector**         |
+| Phase | Was             | Now                                                          |
+| ----- | --------------- | ------------------------------------------------------------ |
+| 2b    | Sentinel        | **Sentinel (with critical tier) + Today screen**             |
+| 3     | Quest           | **Interview-Prep + Single-job workspace + Pre-emptive Tailor + First-tranche mode** |
+| 4     | (was 4)         | **Coach (with speed metrics) + Pause + slim Quest**          |
+| 5     | (new)           | **Negotiator + Follow-Upper + Connector**                    |
 
 ## What I'd cut from the previous plan
 
