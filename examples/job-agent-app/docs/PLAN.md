@@ -114,7 +114,12 @@ Quest:
   7/14/21. Distinct tone for "interviewing" vs "applied" stage.
 - **Connector** — finds the warm-intro path from a user-uploaded
   LinkedIn connections CSV (TOS-safe; user-owned data). "2
-  second-degree connections at Acme — here are draft DMs."
+  second-degree connections at Acme — here are draft DMs." Inspired
+  by `thatrebeccarae/linkedin-toolkit`'s CSV-import pattern, but
+  flipped: their toolkit is backward-looking (analyse the network
+  you have); ours is forward-looking (given a target company, find
+  the warm path). Cross-references the Connections.csv against
+  watched-company set and active-pipeline jobs.
 
 ## The radically un-trendy thing
 
@@ -277,6 +282,22 @@ carries `difficulty` + `competency_tag`.
 - **Mock chat** as opt-in second surface — minimal loop (question →
   text answer → 8-dimension heuristic score 0-10 → next). No voice in
   Phase 3 — adds device complexity for low marginal value.
+
+**Interviewer personas** (lifted from JadeAI). Six presets the user
+selects when starting mock chat: HR / Technical / Scenario /
+Behavioural / Project Deep Dive / Leader. Each persona is a system
+prompt + question-bucket weighting + tone shift. Same underlying loop,
+different feel — simulating the real variance a candidate faces across
+recruiter, hiring manager, and panel rounds.
+
+**Post-session report** (also from JadeAI). After each mock chat:
+- **Competency radar chart** — scores across the user's competency tags
+  derived from Story Bank, persisted across sessions
+- **Per-question scoring** with the 8-dimension rubric breakdown
+- **History comparison** — "your behavioural score has risen from 5.4
+  to 7.1 over the last 4 sessions"
+- **Export** to PDF (via the `@react-pdf/renderer` we're already
+  adopting) and Markdown
 
 **The 60-second daily quiz card** (Today screen):
 **Leitner-lite, not full spaced repetition.** Three queues: New /
