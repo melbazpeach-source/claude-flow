@@ -192,6 +192,117 @@ country. The system should make the speed-vs-care balance a per-user
 setting, default to "match my market" detected from preferred
 locations, and let the user explicitly tune it.
 
+## Lifting from the field (audit pass 2)
+
+A second sweep through 14 adjacent repos. Headline: **no pivot.** The
+nearest comparable (santifer/career-ops) is a single-user CLI + markdown
+tool; we're a typed-agent web app with real persistence. Different
+category. Five specific ideas worth integrating:
+
+### 1. Archetype detection as a pre-Rater step
+
+career-ops' best move: before scoring, classify the role into one of
+6 archetypes (LLMOps / Agentic / PM / Solutions / Frontend /
+Transformation). Each archetype carries a different rubric weighting.
+Currently our Rater uses one rubric for every job, which under-serves
+specialised roles. Add a tiny upstream Archetyper agent (one LLM call,
+single-token output) that selects the rubric Rater applies.
+
+### 2. Story Bank — cross-job behavioural memory
+
+The single most copyable idea in the audit. A new `story_bank` table
+of competency-tagged STAR narratives, accumulated across evaluations.
+Each entry: `{competency, situation, task, action, result, source_job_id, last_used_at}`.
+
+The Story Bank feeds:
+- The back of every behavioural Interview-Prep flashcard (pre-filled
+  STAR scaffold instead of empty form)
+- The Writer agent's cover-letter context (lift the most relevant
+  story to anchor the letter)
+- Coach's "you keep telling the same 3 stories" insight
+
+This is the cross-job memory layer we don't have today, and it's what
+makes pre-emptive tailoring not feel generic — by application #20 the
+system knows you, not just the JD.
+
+### 3. Ghosted state — computed from recipient-side activity only
+
+The crowdsourced ghost-trackers (ghostscore, ghost-rate-tracker,
+do-not-ghost-me) gave us bucket boundaries; the right state machine
+is ours:
+
+| State    | Days since *recipient-side* activity |
+| -------- | ------------------------------------ |
+| Active   | 0-7                                  |
+| Cooling  | 8-14                                 |
+| Stale    | 15-30                                |
+| Ghosted  | 30+                                  |
+
+**Recipient-side only.** User-side activity (sending a follow-up,
+editing notes) does *not* reset the clock — otherwise users hide
+ghosting from themselves. Exception: if an outbound follow-up is
+unanswered for >7d, jump one bucket forward. A follow-up with no
+reply is itself a ghosting signal. Terminal states
+(`rejected`/`offer`/`withdrawn`) override — never "ghosted."
+
+Implemented as a Postgres view or generated column over the jobs +
+activity_events tables. The 30-day modal is consistent across all
+three trackers' histograms.
+
+### 4. Interviewer-Prep — concrete Phase 3 spec
+
+The interview-prep cluster (5 alternates + open-interview UX) yields
+a clean spec:
+
+**Inputs:** job + ParsedProfile + latest Tailored CV + Rater's gaps
++ Story Bank + Archetype.
+
+**Question taxonomy (4 buckets):**
+1. **Behavioural** — competency-tagged, STAR-shaped. Backs pre-filled
+   from Story Bank.
+2. **Technical / role-specific** — derived from JD tools + Rater's
+   strengths.
+3. **Gap-probing** — directly attacks each entry in Rater's `gaps[]`.
+   This is our differentiator — no other repo has pre-computed gaps to
+   work from.
+4. **Culture / company** — derived from company metadata + JD tone.
+
+**Difficulty:** 3 tiers (warm-up / standard / pressure). Each question
+carries `difficulty` + `competency_tag`.
+
+**Two surfaces, not one (open-interview's lesson):**
+- **Flashcard deck** in the single-job workspace — front: question +
+  tag; back: STAR scaffold from Story Bank + "red flags to avoid."
+  Browse, mark known/unknown. No chat.
+- **Mock chat** as opt-in second surface — minimal loop (question →
+  text answer → 8-dimension heuristic score 0-10 → next). No voice in
+  Phase 3 — adds device complexity for low marginal value.
+
+**The 60-second daily quiz card** (Today screen):
+**Leitner-lite, not full spaced repetition.** Three queues: New /
+Review / Mastered. Cards promote on "I knew it," demote on "didn't
+know." Daily draw: 1 from Review (oldest-touched first), 1 from a
+job in active pipeline, 1 random behavioural. Three cards × 20s = under
+a minute. Don't implement SM-2 or Anki algorithms — Leitner queues are
+~20 lines and 80% of the value.
+
+### 5. PDF output for Tailor — `@react-pdf/renderer` only
+
+reactive-resume is an app, not a published library. Skip vendoring;
+lift the one library it pioneered (client-side PDF without Chromium).
+~200 lines mapping ParsedProfile → react-pdf component tree. Keep
+ParsedProfile as the source of truth; do **not** swap to JSON-Resume
+— we'd lose ATS-coverage and gap metadata.
+
+### Smaller things worth borrowing
+
+- From ApplyForge: `PROMPT_*` env-config pattern so power users can
+  tune Tailor / Writer / Coach system+user prompts without editing
+  code.
+- From cv-market-learning-planner: gap → exercise mechanic seeds the
+  Coach agent ("here are the three things to learn before applying
+  to another Staff role").
+
 ## Resequencing the phases
 
 | Phase | Was             | Now                                                          |
