@@ -324,6 +324,70 @@ ParsedProfile as the source of truth; do **not** swap to JSON-Resume
   Coach agent ("here are the three things to learn before applying
   to another Staff role").
 
+## Tab structure (decided)
+
+Five tabs. 7 is over the usability sweet spot; the consolidations
+below lose nothing functionally and reduce navigation cost
+significantly.
+
+| Tab          | Contains                                                                  |
+| ------------ | ------------------------------------------------------------------------- |
+| **Today**    | Dashboard + critical-tier alerts + 60-second drill + runway + last move   |
+| **Pipeline** | Every job, status-filtered, with pinned cards at top for companies of interest. `Watching → Saved → Drafting → Applied → Screening → Onsite → Offer \| Closed`. Click → single-job workspace |
+| **Practice** | Flashcards + mock chat (6 personas) + learning module + user mantras. Always-useful 5-minute surface |
+| **Insights** | Employer reports (crowdsourced ghosting / timewaster / user reviews) + Your stats (Coach's funnel diagnostics). Same tab so contribution and consumption cross-pollinate |
+| **Settings** | Plumbing — provider override, email connector, data export/import         |
+
+### Stage 1 — promote the dreams sheet to onboarding
+
+The "what did you want to be when you grew up" question is the
+North Star check against the day-to-day grind. Without it Rater is
+optimising for "any job" not "the right job," and every
+recommendation is statistical noise. **It belongs in onboarding,
+not Stage 2.** Capture it once, surface it gently when the user is
+about to accept a role 10° off their actual direction.
+
+### Stage 2 — identity & presence layer (post-offer activation)
+
+- **References manager** — who, what they'll vouch for, last-contacted
+- **Presence package** — short intro video, Zoom backdrop, mini-linktree
+  for the personal-branding URL recruiters will look up
+- (Dreams sheet promoted out — it's now Stage 1)
+
+### Stage 3 — employer panel (category change, not additive)
+
+A two-sided marketplace move. Real pivot: agent architecture, value
+prop, monetisation all shift. **Not a tab; a v2 of the product.**
+File for after Phase 5. Revisit when the candidate-side is stable
+and we know what employer demand looks like.
+
+### Mantras — user-supplied, never AI-generated
+
+Hard rule. Onboarding captures 3-5 mantras in the user's own words.
+Practice tab surfaces them at the right beats (before a mock
+interview, before a real interview, at daily drill open, after a
+rejection). AI-generated affirmations are saccharine garbage and the
+user mutes them within a day. Their own words land; nothing else does.
+
+## Three additions to the plan (the "what else")
+
+1. **Application energy tracker** — positive complement to the pause
+   button. User marks "3 hours today" or "30 min." Today surfaces
+   tasks proportional to energy. Respects the human, not the metric.
+2. **Compensation conversation log** — every salary mention across
+   recruiter chats, one place per job. Critical at offer stage;
+   Negotiator agent needs this to be useful at all.
+3. **Visa/relocation status** on profile — for NZ specifically,
+   "work rights" is often the gating question that an algorithm could
+   surface upfront rather than letting the user discover it 3
+   interviews in.
+
+Intentionally left out:
+- Skills-depreciation tracker (Coach surfaces this as needed)
+- Cohort/community layer (loneliness is real, social network is a
+  different product)
+- Day-1-of-new-job prep (system goes quiet when user lands; respect that)
+
 ## Resequencing the phases
 
 | Phase | Was             | Now                                                          |
