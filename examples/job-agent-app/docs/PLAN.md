@@ -388,6 +388,54 @@ Intentionally left out:
   different product)
 - Day-1-of-new-job prep (system goes quiet when user lands; respect that)
 
+## Scope: job-hunt v1, career-companion v2 (hooks now)
+
+**v1 stays focused on job-hunting.** The ethical north star — user
+lands a job and doesn't need us until next time — holds. v2 (career-
+companion: in-role promotions, payrises, ongoing visibility coaching)
+is filed as a real future pivot, not an additive feature.
+
+But we bake in hooks now so v2 isn't a rewrite:
+
+### Hooks added in v1
+
+- **Dreams sheet at onboarding** (already promoted to Stage 1) — the
+  long-term aspiration data that Career-paths v1 and in-role coaching
+  v2 both read from.
+- **`Landed` as a real pipeline state, not an archive.** When the user
+  accepts an offer, the job becomes their current position rather than
+  disappearing from view. Activity-events keep accumulating.
+- **Onboarding asks "are you currently employed?" and "when do you
+  want to next move?"** — captures the user's relationship to
+  job-hunting so v2 can flip the product mode without re-onboarding.
+- **`activity_events` schema kept generic enough** to absorb in-role
+  events later (promotion granted, salary change, milestone) with
+  zero migrations.
+
+### What ships in v1 from the new batch
+
+- **Dressed for success** — Stage 2 presence package alongside Zoom
+  backdrop + video. Industry/region/role-aware styling (NZ tech =
+  casual, NZ finance = suit). Not generic.
+- **Career paths (read-only v1)** — uses the dreams sheet to surface
+  2-3 routes from current role to long-term aspiration, with the next
+  2 steps mapped. No in-role coaching yet — that's the v2 line.
+
+### What's explicitly deferred to v2
+
+- Getting promotions
+- Getting payrises
+- In-role visibility / scope coaching
+- Employer panel (was Stage 3 in earlier plan version)
+
+### What's explicitly dropped, not deferred
+
+- **Legal assist agent of any shape.** Translation, signposting,
+  contract reading — all out for v1. Practising law without a licence
+  is illegal in most jurisdictions; LLMs hallucinating legal advice
+  has real harm potential. If we ever add it, it's via partnership
+  with a real legal service, not an in-house agent.
+
 ## Resequencing the phases
 
 | Phase | Was             | Now                                                          |
